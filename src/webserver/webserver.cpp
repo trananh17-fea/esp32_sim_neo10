@@ -1,252 +1,268 @@
 #include "webserver.h"
-#include <WiFi.h>
+#include "Config.h"
+#include "DATAEG/SIM7680C.h"
+#include "GPS/gps.h"
+#include "Storage/Storage.h"
+#include "geofencing/geofencing.h"
+#include "tracking/tracking.h"
 #include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
+#include <ESPAsyncWebServer.h>
+#include <WiFi.h>
 
 static AsyncWebServer server(80);
 static DNSServer dnsServer;
-
-// >>> Đổi tên này theo ý bạn (chỉ dùng để HƯỚNG DẪN người dùng gõ HTTP)
 static const byte DNS_PORT = 53;
 static IPAddress apIP(192, 168, 4, 1);
 
-static const char *FRIENDLY_HOST = "setup.device";
-
-void taskSendSMS(void *param)
-{
-  String link = getGPSLink();
-  SIM7680C_sendSMS(link);
-  vTaskDelete(NULL);
+// ============================================================
+// JSON-safe string escape (handles " and \)
+// ============================================================
+static String jsonEsc(const char *s) {
+  String out;
+  out.reserve(strlen(s) + 8);
+  while (*s) {
+    if (*s == '"' || *s == '\\')
+      out += '\\';
+    out += *s++;
+  }
+  return out;
 }
 
-static void sendLanding(AsyncWebServerRequest *req)
-{
-  if (auto *c = req->client())
-    c->setNoDelay(true);
-
-  const char *html = R"HTML(
-<!DOCTYPE html><html lang="vi"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Thiết lập SOS</title>
+// ============================================================
+// Portal HTML — dark gradient, status chips, clean form
+// ~3.5KB embedded, zero external dependencies
+// ============================================================
+static const char PORTAL_HTML[] PROGMEM = R"HTML(
+<!DOCTYPE html><html><head>
+<meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>SOS GPS Tracker</title>
 <style>
-  :root{
-    --bg:#0b1220; --ink:#eef2ff; --muted:#9aa6c6; --brand:#2563eb; --ok:#16a34a;
-    --card:#0f172acc; --border:#23324d; --radius:18px;
-  }
-  *{box-sizing:border-box} html,body{height:100%}
-  body{
-    margin:0; font-family:system-ui, Segoe UI, Roboto, Arial;
-    background:var(--bg); color:var(--ink);
-    display:flex; align-items:center; justify-content:center; padding:16px;
-  }
-  .wrap{ width:min(720px,100%); }
-  .card{
-    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
-    padding:18px; box-shadow:0 10px 30px #0006;
-  }
-  .title{margin:6px 0 8px; font-size:22px; font-weight:800; letter-spacing:.2px}
-  .hint{margin:0 0 12px; color:var(--muted); font-size:13px}
-  .grid{ display:grid; grid-template-columns:1fr; gap:12px; }
-  @media (min-width:640px){ .grid{ grid-template-columns: 1fr 1fr; } }
-  label{ font-size:14px; color:var(--muted); margin-bottom:6px; display:block }
-  input{
-    width:100%; padding:12px 12px; border-radius:12px; outline:none;
-    background:#1e293b; border:1px solid var(--border); color:#fff; font-size:16px;
-  }
-  .actions{
-    display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; margin-top:12px;
-  }
-  button{ appearance:none; border:0; border-radius:12px; padding:12px 16px; font-weight:700; cursor:pointer; }
-  .save{ background:var(--brand); color:#fff }
-  .send{ background:var(--ok); color:#06210d }
-  .toast{
-    position:fixed; left:50%; transform:translateX(-50%);
-    bottom:16px; padding:10px 14px; border-radius:10px; font-size:14px;
-    background:#0f172aff; border:1px solid var(--border); color:#fff; display:none;
-  }
-  .row{ display:flex; flex-direction:column; gap:6px }
-</style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="title">Thiết lập SOS</div>
-      <p class="hint">Mẹo: lần sau chỉ cần gõ <b>http://setup.device</b> để mở trang này.</p>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0b1222;color:#f1f5f9;min-height:100vh}
+.hd{background:linear-gradient(135deg,#0ea5e9,#7c3aed);padding:24px 16px 18px;text-align:center}
+.hd h1{font-size:20px;font-weight:800;letter-spacing:.2px}
+.st{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:14px}
+.ch{background:rgba(0,0,0,.22);padding:5px 12px;border-radius:999px;font-size:11px;font-weight:700;border:1.5px solid rgba(148,163,184,.35);transition:all .25s}
+.ch.g{border-color:#22c55e;color:#4ade80}
+.ch.y{border-color:#f59e0b;color:#fbbf24}
+.ch.r{border-color:#ef4444;color:#f87171}
+.mn{max-width:430px;margin:0 auto;padding:16px}
+.cd{background:#111b32;border-radius:18px;padding:20px;box-shadow:0 6px 28px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06)}
+label{display:block;font-size:11px;color:#94a3b8;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+label:first-child{margin-top:0}
+input,textarea{width:100%;padding:12px 14px;background:#0b1222;border:1px solid rgba(148,163,184,.25);border-radius:12px;color:#f1f5f9;font-size:15px;transition:border .2s,box-shadow .2s}
+input:focus,textarea:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
+input::placeholder,textarea::placeholder{color:#64748b}
+textarea{resize:vertical;font-family:inherit;min-height:66px}
+.bt{display:block;width:100%;padding:14px;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;transition:transform .15s,opacity .15s;letter-spacing:.2px}
+.bt:active{transform:scale(.98)}
+.bt:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.row{display:flex;gap:10px;margin-top:14px}
+.row .bt{flex:1}
+.bp{background:linear-gradient(135deg,#22c55e,#16a34a);color:#05140c;box-shadow:0 2px 14px rgba(34,197,94,.18)}
+.bh{background:linear-gradient(135deg,#60a5fa,#38bdf8);color:#061220;box-shadow:0 2px 14px rgba(56,189,248,.18)}
+.card2{margin-top:14px;padding:14px;border-radius:16px;background:rgba(2,6,23,.35);border:1px solid rgba(148,163,184,.12)}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#cbd5e1;margin-top:8px}
+.kv:first-child{margin-top:0}
+.kv b{color:#f1f5f9}
+.sub{font-size:12px;color:#94a3b8;margin-top:10px;line-height:1.35}
+.hn{font-size:12px;color:#94a3b8;margin-top:12px;text-align:center}
+.tt{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-110px);padding:12px 26px;border-radius:14px;font-size:14px;font-weight:900;z-index:99;transition:transform .35s cubic-bezier(.34,1.56,.64,1);pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.tt.s{transform:translateX(-50%) translateY(0);background:#22c55e;color:#fff}
+.tt.e{transform:translateX(-50%) translateY(0);background:#ef4444;color:#fff}
+</style></head><body>
+<div class=hd>
+  <h1>📡 SOS GPS Tracker</h1>
+  <div class=st>
+    <span class=ch id=sg>GPS: --</span>
+    <span class=ch id=sd>Khoảng cách: --</span>
+    <span class=ch id=gf>Vùng: --</span>
+    <span class=ch id=s4>4G: --</span>
+    <span class=ch id=sw>WiFi: --</span>
+  </div>
+</div>
 
-      <div class="grid">
-        <div class="row">
-          <label>Số điện thoại</label>
-          <input id="phone" type="tel" inputmode="tel" placeholder="+84775316675" autocomplete="tel" required>
-        </div>
-        <div class="row">
-          <label>Nội dung</label>
-          <input id="message" type="text" placeholder="HELP ME" maxlength="160" required>
-        </div>
-      </div>
+<div class=mn><div class=cd>
+  <label>Số điện thoại 1</label>
+  <input id=p1 type=tel placeholder="Ví dụ: 077xxxxxxx hoặc +84...">
+  <label>Số điện thoại 2</label>
+  <input id=p2 type=tel placeholder="(tuỳ chọn)">
+  <label>Số điện thoại 3</label>
+  <input id=p3 type=tel placeholder="(tuỳ chọn)">
+  <label>Lời nhắn SMS</label>
+  <textarea id=ms placeholder="Ví dụ: Tôi cần hỗ trợ khẩn cấp..."></textarea>
 
-      <div class="actions">
-        <button class="save" id="saveBtn">💾 Lưu</button>
-        <button class="send" id="sendBtn">✉️ Gửi tin nhắn</button>
-      </div>
-    </div>
+  <div class=card2>
+    <div class=kv><span>HOME</span><b id=home>Chưa có</b></div>
+    <div class=kv><span>Khoảng cách tới HOME</span><b id=dist>--</b></div>
+    <div class=kv><span>Geofence</span><b id=geo>--</b></div>
+    <div class=sub>• <b>Lưu HOME</b> sẽ lấy vị trí GPS hiện tại làm “nhà”.</div>
+    <div class=sub>• Trạng thái chi tiết (GPS/sóng/cảnh báo) xem ở Serial log.</div>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div class=row>
+    <button class="bt bp" id=bs onclick=sv()>Lưu cấu hình</button>
+    <button class="bt bh" id=bh onclick=sh() disabled>Lưu HOME</button>
+  </div>
 
+  <div class=hn>HOTLINE: <b>0982690587</b></div>
+</div></div>
+
+<div class=tt id=tt></div>
 <script>
-(function(){
-  const phoneEl = document.getElementById('phone');
-  const msgEl   = document.getElementById('message');
-  const toastEl = document.getElementById('toast');
-
-  function toast(t, ok=true){
-    toastEl.textContent = t;
-    toastEl.style.borderColor = ok ? '#1f6feb' : '#ef4444';
-    toastEl.style.display = 'block';
-    setTimeout(()=> toastEl.style.display='none', 1600);
-  }
-
-  function normalizePhone(raw){
-    let s = (raw||'').replace(/[^\d+]/g,'');
-    if (s.startsWith('00')) s = '+' + s.slice(2);
-    if (s.startsWith('0'))  s = '+84' + s.slice(1);
-    if (!s.startsWith('+')) s = '+' + s;
-    return s;
-  }
-
-  function buildPayload(){
-    const p = normalizePhone(phoneEl.value);
-    const m = msgEl.value.trim();
-    return { phone: p, message: m };
-  }
-
-  async function postForm(url, data){
-    const body = new URLSearchParams(data).toString();
-    const r = await fetch(url, {
-      method:'POST',
-      headers: { 'Content-Type':'application/x-www-form-urlencoded' },
-      body
-    });
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    return await r.text();
-  }
-
-  document.getElementById('saveBtn').onclick = async ()=>{
-    try{
-      const {phone, message} = buildPayload();
-      if (!phone || phone.length < 9) return toast('Số điện thoại không hợp lệ', false);
-      if (!message) return toast('Nội dung trống', false);
-      await postForm('/save', { phone, message });
-      toast('Đã lưu');
-    }catch(e){ toast('Lưu thất bại', false); }
-  };
-
-  document.getElementById('sendBtn').onclick = async ()=>{
-    try{
-      const {phone, message} = buildPayload();
-      if (!phone || phone.length < 9) return toast('Số điện thoại không hợp lệ', false);
-      if (!message) return toast('Nội dung trống', false);
-      await postForm('/send', { phone, message });
-      toast('Đã gửi yêu cầu');
-    }catch(e){ toast('Gửi thất bại', false); }
-  };
-
-  setTimeout(()=> { if (window.innerWidth<640) phoneEl.focus(); }, 300);
-})();
-</script>
-</body></html>
+var $=function(i){return document.getElementById(i)};
+function toast(m,ok){var t=$('tt');t.textContent=m;t.className='tt '+(ok?'s':'e');setTimeout(function(){t.className='tt'},2500)}
+function N(p){p=(p||'').trim();if(p.charAt(0)==='0'&&p.length>8)return'+84'+p.substring(1);return p}
+function init(){fetch('/config').then(function(r){return r.json()}).then(function(c){
+  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||''
+}).catch(function(){})}
+function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
+  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value);
+  fetch('/save_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d})
+    .then(function(r){toast(r.ok?'Đã lưu cấu hình!':'Lỗi lưu cấu hình',r.ok)})
+    .catch(function(){toast('Không thể lưu',false)})
+    .finally(function(){b.disabled=false;b.textContent='Lưu cấu hình'})}
+function sh(){var b=$('bh');b.disabled=true;b.textContent='Đang lưu...';
+  fetch('/save_home',{method:'POST'}).then(function(r){return r.json()}).then(function(j){
+    toast(j.ok?'Đã lưu HOME!':(j.msg||'GPS chưa có fix'),('ok' in j&&j.ok))
+  }).catch(function(){toast('Không thể lưu',false)})
+    .finally(function(){b.disabled=false;b.textContent='Lưu HOME'})}
+function cl(v){return v>6?'g':v>3?'y':'r'}
+function poll(){fetch('/status').then(function(r){return r.json()}).then(function(s){
+  $('sg').textContent='GPS: '+(s.fix?('FIX • '+s.sats+' vệ tinh'):'NO FIX');$('sg').className='ch '+(s.fix?'g':'r');
+  var dOk=(s.dist>=0);
+  $('sd').textContent='Khoảng cách: '+(dOk?Math.round(s.dist)+'m':'--');$('sd').className='ch '+(dOk?'g':'');
+  $('gf').textContent='Vùng: '+(s.geo_en?('ON • '+s.geo_rad+'m'):'OFF');$('gf').className='ch '+(s.geo_en?'y':'');
+  $('s4').textContent='4G: '+s.c4+'/10';$('s4').className='ch '+cl(s.c4);
+  $('sw').textContent='WiFi: '+s.wf+'/10';$('sw').className='ch '+cl(s.wf);
+  $('home').textContent=s.has_home?'Đã có':'Chưa có';
+  $('dist').textContent=dOk?(Math.round(s.dist)+' m'):'--';
+  $('geo').textContent=s.geo_en?('Bật • bán kính '+s.geo_rad+'m'):'Tắt';
+  $('bh').disabled=!s.fix;
+}).catch(function(){})}
+init();poll();setInterval(poll,2000);
+</script></body></html>
 )HTML";
 
-  req->send(200, "text/html; charset=UTF-8", html);
-}
-
-void initFriendlyNamePortal()
-{
-  Serial.begin(115200);
-
-  // Wi-Fi AP tối ưu cho portal
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_AP);
-  WiFi.setSleep(false);
-  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-  WiFi.softAP("TV_Device", "123456788", 6 /*kênh*/, 0 /*hidden*/);
-
-  Serial.print("[AP] IP: ");
-  Serial.println(WiFi.softAPIP());
-
-  // DNS wildcard: bất kỳ tên miền -> apIP
+// ============================================================
+void initFriendlyNamePortal() {
   dnsServer.start(DNS_PORT, "*", apIP);
 
-  // Trang chính
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *r)
-            { sendLanding(r); });
+  // --- Main page ---
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *r) {
+    r->send(200, "text/html", PORTAL_HTML);
+  });
 
-  // Lưu vào bộ nhớ
-  server.on("/save", HTTP_POST, [](AsyncWebServerRequest *r)
-            {
-  if (r->hasParam("phone", true) && r->hasParam("message", true)) {
-    String phone = r->getParam("phone", true)->value();
-    String message = r->getParam("message", true)->value();
+  // --- GET /config → JSON for form prefill ---
+  server.on("/config", HTTP_GET, [](AsyncWebServerRequest *r) {
+    String j = "{\"c1\":\"" + jsonEsc(CALL_1) +
+               "\","
+               "\"c2\":\"" +
+               jsonEsc(CALL_2) +
+               "\","
+               "\"c3\":\"" +
+               jsonEsc(CALL_3) +
+               "\","
+               "\"sms\":\"" +
+               jsonEsc(SMS_TEMPLATE) +
+               "\","
+               "\"home\":" +
+               String((HOME_LAT != 0 || HOME_LNG != 0) ? "true" : "false") +
+               ",\"geo_en\":" + String(GEOFENCE_ENABLE ? "true" : "false") +
+               ",\"geo_rad\":" + String(GEOFENCE_RADIUS_M) +
+               "}";
+    r->send(200, "application/json", j);
+  });
 
-    saveDataToRom(phone, message); // 🔹 Lưu vào NVS + cập nhật PHONE/SMS
+  // --- POST /save_config → phones + SMS only, other settings untouched ---
+  server.on("/save_config", HTTP_POST, [](AsyncWebServerRequest *r) {
+    auto val = [&](const char *n) -> String {
+      return r->hasParam(n, true) ? r->getParam(n, true)->value() : String("");
+    };
 
+    strncpy(CALL_1, val("c1").c_str(), sizeof(CALL_1) - 1);
+    CALL_1[sizeof(CALL_1) - 1] = '\0';
+    strncpy(CALL_2, val("c2").c_str(), sizeof(CALL_2) - 1);
+    CALL_2[sizeof(CALL_2) - 1] = '\0';
+    strncpy(CALL_3, val("c3").c_str(), sizeof(CALL_3) - 1);
+    CALL_3[sizeof(CALL_3) - 1] = '\0';
+    strncpy(SMS_TEMPLATE, val("sms").c_str(), sizeof(SMS_TEMPLATE) - 1);
+    SMS_TEMPLATE[sizeof(SMS_TEMPLATE) - 1] = '\0';
+
+    // Update legacy copies
+    strncpy(PHONE, CALL_1, sizeof(PHONE) - 1);
+    strncpy(SMS, SMS_TEMPLATE, sizeof(SMS) - 1);
+
+    // Save ONLY these 4 fields to NVS (nothing else disturbed)
+    nvs_set_str(nvsHandle, "CALL_1", CALL_1);
+    nvs_set_str(nvsHandle, "CALL_2", CALL_2);
+    nvs_set_str(nvsHandle, "CALL_3", CALL_3);
+    nvs_set_str(nvsHandle, "SMS_TPL", SMS_TEMPLATE);
+    nvs_commit(nvsHandle);
+
+    Serial.printf("[PORTAL] Saved: C1=%s C2=%s C3=%s\n", CALL_1, CALL_2,
+                  CALL_3);
     r->send(200, "text/plain", "OK");
-  } else {
-    r->send(400, "text/plain", "Missing params");
-  } });
+  });
 
-  // Gui tin nhắn
-  server.on("/send", HTTP_POST, [](AsyncWebServerRequest *r)
-            {
-  String phone, message;
+  // --- POST /save_home → save current GPS as HOME ---
+  server.on("/save_home", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (!GPS_READY) {
+      r->send(200, "application/json", "{\"ok\":false,\"msg\":\"No GPS fix\"}");
+      return;
+    }
+    double lat = GPS_getLatitude();
+    double lng = GPS_getLongitude();
+    if (lat == 0 && lng == 0) {
+      r->send(200, "application/json",
+              "{\"ok\":false,\"msg\":\"GPS position is 0,0\"}");
+      return;
+    }
+    saveHomeLocation(lat, lng);
+    r->send(200, "application/json", "{\"ok\":true}");
+  });
 
-  // Ưu tiên lấy dữ liệu mới từ form
-  if (r->hasParam("phone", true))
-    phone = r->getParam("phone", true)->value();
-  else if (strlen(PHONE) > 0)
-    phone = PHONE; // fallback: dùng giá trị đã lưu
+  // --- GET /status → combined GPS + signal + distance (one request) ---
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *r) {
+    bool fix = GPS_READY;
+    int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
+    double lat = GPS_getLatitude();
+    double lng = GPS_getLongitude();
+    bool hasHome = (HOME_LAT != 0 || HOME_LNG != 0);
+    double dist = -1;
+    if (hasHome && fix && (lat != 0 || lng != 0))
+      dist = calculateDistance(lat, lng, HOME_LAT, HOME_LNG);
 
-  if (r->hasParam("message", true))
-    message = r->getParam("message", true)->value();
-  else if (strlen(SMS) > 0)
-    message = SMS;
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+             "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
+             "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
+             "\"geo_en\":%s,\"geo_rad\":%d}",
+             fix ? "true" : "false", sats, dist, (int)SIGNAL_4G,
+             (int)SIGNAL_WIFI, hasHome ? "true" : "false",
+             GEOFENCE_ENABLE ? "true" : "false", (int)GEOFENCE_RADIUS_M);
+    r->send(200, "application/json", buf);
+  });
 
-  // Nếu thiếu dữ liệu thì báo lỗi
-  if (phone.isEmpty() || message.isEmpty()) {
-    r->send(400, "text/plain", "Chưa nhập số điện thoại hoặc nội dung");
-    Serial.println("[WARN] Không có số điện thoại hoặc nội dung để gửi SMS");
-    return;
-  }
+  // --- Hidden debug endpoints (accessible by URL only) ---
+  server.on("/track_test", HTTP_GET, [](AsyncWebServerRequest *r) {
+    r->send(200, "application/json", trackingTestRequest());
+  });
 
-  // Lưu lại để cập nhật NVS + biến toàn cục
-  saveDataToRom(phone, message);
+  server.on("/assist_status", HTTP_GET, [](AsyncWebServerRequest *r) {
+    char buf[80];
+    snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"ready\":%s}",
+             ASSIST_STATUS, ASSIST_READY ? "true" : "false");
+    r->send(200, "application/json", buf);
+  });
 
-  // 🔹 Bước 1: lấy link GPS
-  String link = getGPSLink(); // ví dụ: "https://maps.google.com/?q=10.1234,106.5678"
-  Serial.printf("[GPS] Link: %s\n", link.c_str());
-
-  // 🔹 Bước 2: Gọi hàm gửi SMS (nội dung = SMS + link)
-  xTaskCreatePinnedToCore(taskSendSMS, "taskSendSMS", 4096, NULL, 1, NULL, 1);
-
-  r->send(200, "text/plain", "Đang gửi SMS..."); });
-
-  // Redirect mọi URL khác về tên dễ nhớ (giúp người dùng thấy đúng tên)
-  server.onNotFound([](AsyncWebServerRequest *r)
-                    {
-    String url = String("http://") + FRIENDLY_HOST + "/";
-    AsyncWebServerResponse* resp = r->beginResponse(302, "text/plain", "");
-    resp->addHeader("Location", url);
-    r->send(resp); });
-
-  // (tuỳ chọn) chặn cache để luôn tải mới
-  // DefaultHeaders::Instance().addHeader("Cache-Control", "no-store");
+  // --- Captive portal: redirect any URL to "/" ---
+  server.onNotFound(
+      [](AsyncWebServerRequest *r) { r->redirect("http://192.168.4.1/"); });
 
   server.begin();
-  Serial.println("[Web] Friendly-name portal ready ✅");
+  Serial.println("[PORTAL] http://192.168.4.1 (or any URL on AP)");
 }
 
-void loopFriendlyNamePortal()
-{
-  dnsServer.processNextRequest(); // cần gọi thường xuyên trong loop
-}
+void loopFriendlyNamePortal() { dnsServer.processNextRequest(); }

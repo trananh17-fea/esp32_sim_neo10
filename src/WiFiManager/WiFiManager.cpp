@@ -1,63 +1,65 @@
-#include "WiFi.h"
+#include "WiFiManager.h"
+#include "server.h"
 
-void WiFiEvent(WiFiEvent_t event)
-{
-    printf("[WiFi-event] %d\n", event);
-    switch (event)
-    {
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        printf("[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-        break;
-
-    case ARDUINO_EVENT_WIFI_AP_START:
-        printf("[WiFi] AP Started! SSID: %s\n", WiFi.softAPSSID().c_str());
-        break;
-
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        printf("[WiFi] STA Disconnected!\n");
-        break;
-
-    default:
-        break;
-    }
+// ============================================================
+// WiFi event handler (informational only)
+// ============================================================
+static void onWiFiEvent(WiFiEvent_t event) {
+  switch (event) {
+  case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+    Serial.printf("[WIFI] STA connected, IP: %s\n",
+                  WiFi.localIP().toString().c_str());
+    break;
+  case ARDUINO_EVENT_WIFI_AP_START:
+    Serial.printf("[WIFI] AP started, SSID: %s  IP: %s\n",
+                  WiFi.softAPSSID().c_str(),
+                  WiFi.softAPIP().toString().c_str());
+    break;
+  case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    Serial.println("[WIFI] STA disconnected");
+    break;
+  default:
+    break;
+  }
 }
 
-void initWiFi()
-{
-    WiFi.mode(WIFI_MODE_APSTA); // ⭐ Quan trọng: AP + STA đồng thời
+// ============================================================
+// ** SINGLE SOURCE OF TRUTH for WiFi.mode() **
+// Sets APSTA so AP is always available + STA can connect to router.
+// ============================================================
+void initWiFi() {
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_MODE_APSTA); // <-- THE ONLY WiFi.mode() call
+  WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setAutoReconnect(true);
+  WiFi.onEvent(onWiFiEvent);
 
-    WiFi.setSleep(WIFI_PS_NONE);
-    WiFi.persistent(false);
-    WiFi.setAutoReconnect(true);
-    WiFi.onEvent(WiFiEvent);
+  // --- AP ---
+  const char *AP_SSID = "TV_DEVICE";
+  const char *AP_PASS = "123456788";
 
-    // ==============================
-    // 1️⃣ Khởi động AP
-    // ==============================
-    const char *AP_SSID = "ESP32-SETUP";
-    const char *AP_PASS = "123456788";
+  IPAddress apIP(192, 168, 4, 1);
+  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
-    bool ap_ok = WiFi.softAP(AP_SSID, AP_PASS);
-    if (ap_ok)
-        printf("[AP] Started! IP: %s\n", WiFi.softAPIP().toString().c_str());
-    else
-        printf("[AP] Failed to start!\n");
+  if (WiFi.softAP(AP_SSID, AP_PASS, 6, 0))
+    Serial.printf("[WIFI] AP OK  SSID=%s  IP=%s\n", AP_SSID,
+                  WiFi.softAPIP().toString().c_str());
+  else
+    Serial.println("[WIFI] AP FAILED");
 
-    // ==============================
-    // 2️⃣ Kết nối router (STA)
-    // ==============================
-    printf("[STA] Connecting to SSID: %s\n", SSID_Name);
-    WiFi.begin(SSID_Name, SSID_Password);
+  // --- STA ---
+  Serial.printf("[WIFI] STA connecting to '%s'...\n", SSID_Name);
+  WiFi.begin(SSID_Name, SSID_Password);
 
-    unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 8000)
-    {
-        delay(400);
-        printf(".");
-    }
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) {
+    delay(400);
+    Serial.print(".");
+  }
 
-    if (WiFi.status() == WL_CONNECTED)
-        printf("\n[STA] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    else
-        printf("\n[STA] Failed!\n");
+  if (WiFi.status() == WL_CONNECTED)
+    Serial.printf("\n[WIFI] STA OK  IP=%s\n",
+                  WiFi.localIP().toString().c_str());
+  else
+    Serial.println("\n[WIFI] STA failed (AP still running)");
 }

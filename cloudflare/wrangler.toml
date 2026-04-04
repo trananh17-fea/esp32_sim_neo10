@@ -1,0 +1,7 @@
+name = "gps-tracker" # Hoặc tên dự án của bạn
+main = "worker.js"   # Đường dẫn tới file code của bạn
+compatibility_date = "2026-01-01"
+
+[[kv_namespaces]]
+binding = "TRACKER_KV"
+id = "2215fa35bcec44ae8cc73e98a8d6ccbe"

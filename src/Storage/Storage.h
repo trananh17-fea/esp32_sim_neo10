@@ -1,12 +1,13 @@
 #ifndef STORAGE_H
 #define STORAGE_H
 
-#include <nvs_flash.h>
 #include <nvs.h>
-#include <Config.h>
+#include <nvs_flash.h>
 #include "server.h"
-
+#include "Config.h"
+    
 void initStorage();
 void loadDataFromRom();
-void saveDataToRom(const String &phone, const String &sms);
+void saveAllConfig(); // save everything to NVS
+
 #endif
