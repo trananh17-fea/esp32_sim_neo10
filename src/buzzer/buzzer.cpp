@@ -9,8 +9,9 @@ void buzzer_init() {
 
 void buzzer_beep(int duration, int times, int gap) {
   for (int i = 0; i < times; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
+    tone(BUZZER_PIN, 2000); // Thay thế digitalWrite(HIGH) bằng tone 2kHz
     delay(duration);
+    noTone(BUZZER_PIN); // Tắt âm thanh
     digitalWrite(BUZZER_PIN, LOW);
     delay(gap);
   }
