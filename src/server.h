@@ -1,7 +1,6 @@
-
 #ifdef DEV
-#define SSID_Name "ADMIN"
-#define SSID_Password "123456788"
+#define SSID_Name "Thanh Vu"
+#define SSID_Password "thanhvu@wifi"
 
 #define QUOTE "\""
 #define COMMA ","
@@ -9,12 +8,11 @@
 #define OPEN_BRACKET "["
 #define CLOSE_BRACKET "]"
 
-#define PHONE_NUMBER "+84347232207"
+#define DEFAULT_PHONE "+84347232207"
 #define SMS_TEXT "I need support. Please visit at: "
 #define GPS_LOCAL_LAT "10.901146"
 #define GPS_LOCAL_LNG "106.806184"
 
-// #define USE_LCD 1
 #define DEBUG_ESP_PORT Serial
 
 #endif

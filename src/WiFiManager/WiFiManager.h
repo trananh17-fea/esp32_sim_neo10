@@ -2,10 +2,8 @@
 #define WIFI_MANAGER_H
 
 #include <WiFi.h>
-#include <Config.h>
-#include <strip/strip.h>
 
+// The ONLY place WiFi mode is configured. Do NOT set WiFi.mode() elsewhere.
 void initWiFi();
-void WiFiEvent(WiFiEvent_t event);
 
 #endif

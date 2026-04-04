@@ -1,19 +1,21 @@
 #include <Arduino.h>
-#include "strip/strip.h"
-#include "WiFiManager/WiFiManager.h"
-#include "DATAEG/SIM7680C.h"
-#include "sms/sms.h"
-#include "buzzer/buzzer.h"
-#include "GPS/gps.h"
-#include "button/button.h"
-#include <TinyGPSPlus.h>
 #include <HardwareSerial.h>
-#include "webserver/webserver.h"
-#include "Storage/Storage.h"
-#include "assistnow/assistnow.h"
-#include "tracking/tracking.h"
+#include <TinyGPSPlus.h>
+#include <WiFi.h>
 
-TaskHandle_t xHandle_button = NULL;
-TaskHandle_t xHandle_gps = NULL;
-TaskHandle_t xHandle_sms = NULL;
-TaskHandle_t xHandle_sim7680c = NULL;
+#include "DATAEG/SIM7680C.h"
+#include "GPS/gps.h"
+#include "Storage/Storage.h"
+#include "WiFiManager/WiFiManager.h"
+#include "assistnow/assistnow.h"
+#include "button/button.h"
+#include "buzzer/buzzer.h"
+#include "geofencing/geofencing.h"
+#include "signal/SignalMonitor.h"
+#include "strip/strip.h"
+#include "tracking/tracking.h"
+#include "webserver/webserver.h"
+
+// Task handles
+extern TaskHandle_t xHandle_gps;
+extern TaskHandle_t xHandle_sim7680c;
