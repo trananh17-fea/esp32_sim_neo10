@@ -1,6 +1,6 @@
 import "leaflet/dist/leaflet.css";
 import { divIcon } from "leaflet";
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { useMapEvents } from "react-leaflet";
 import {
   Circle,
@@ -68,6 +68,8 @@ const draftIcon = divIcon({
 
 const DEFAULT_CENTER: [number, number] = [10.901146, 106.806184];
 const OSRM_BASE = "https://router.project-osrm.org";
+const MAX_ROUTE_CONCURRENCY = 2;
+const MAX_ROUTE_POINTS = 120;
 const roadRouteCache = new Map<string, CachedRoute>();
 
 function isValidPair(lat?: number | null, lng?: number | null): lat is number {
@@ -99,6 +101,23 @@ function formatDuration(durationS: number): string {
   if (durationS < 60) return `${Math.max(1, Math.round(durationS))} s`;
   if (durationS < 3600) return `${Math.round(durationS / 60)} min`;
   return `${(durationS / 3600).toFixed(1)} h`;
+}
+
+function downsamplePositions(
+  positions: [number, number][],
+  maxPoints = MAX_ROUTE_POINTS
+): [number, number][] {
+  if (positions.length <= maxPoints) return positions;
+
+  const sampled: [number, number][] = [];
+  const lastIndex = positions.length - 1;
+
+  for (let i = 0; i < maxPoints; i += 1) {
+    const index = Math.round((i / (maxPoints - 1)) * lastIndex);
+    sampled.push(positions[index]);
+  }
+
+  return sampled;
 }
 
 function buildRouteKey(request: RouteRequest): string {
@@ -139,7 +158,7 @@ async function fetchRoadRoute(
   const url =
     `${OSRM_BASE}/route/v1/driving/` +
     `${request.startLng},${request.startLat};${request.endLng},${request.endLat}` +
-    `?overview=full&geometries=geojson&steps=false`;
+    `?overview=simplified&geometries=geojson&steps=false&alternatives=false`;
 
   try {
     const response = await fetch(url, { signal });
@@ -161,7 +180,7 @@ async function fetchRoadRoute(
     }
 
     const mapped: CachedRoute = {
-      positions: coords.map(([lng, lat]) => [lat, lng]),
+      positions: downsamplePositions(coords.map(([lng, lat]) => [lat, lng])),
       distanceM: route.distance ?? 0,
       durationS: route.duration ?? 0,
       source: "osrm",
@@ -205,8 +224,14 @@ export function TrackerMap({
 }: TrackerMapProps) {
   const [roadRoutes, setRoadRoutes] = useState<RoadRoute[]>([]);
 
-  const visibleDevices = devices.filter((d) => isValidPair(d.lat, d.lng));
-  const visibleHistory = history.filter((p) => isValidPair(p.lat, p.lng));
+  const visibleDevices = useMemo(
+    () => devices.filter((d) => isValidPair(d.lat, d.lng)),
+    [devices]
+  );
+  const visibleHistory = useMemo(
+    () => history.filter((p) => isValidPair(p.lat, p.lng)),
+    [history]
+  );
   const selectedDevice =
     visibleDevices.find((d) => d.deviceId === selectedDeviceId) ?? null;
 
@@ -242,6 +267,11 @@ export function TrackerMap({
       }));
   }, [routeMode, selectedDeviceId, visibleDevices]);
 
+  const routeRequestKey = useMemo(
+    () => routeRequests.map(buildRouteKey).join("|"),
+    [routeRequests]
+  );
+
   useEffect(() => {
     if (!routeRequests.length) {
       setRoadRoutes([]);
@@ -249,27 +279,44 @@ export function TrackerMap({
     }
 
     const controller = new AbortController();
+    const loadRoutes = async () => {
+      const routes: RoadRoute[] = [];
 
-    Promise.all(
-      routeRequests.map(async (request) => {
-        const route = await fetchRoadRoute(request, controller.signal);
-        return {
-          deviceId: request.deviceId,
-          deviceName: request.deviceName,
-          selected: request.selected,
-          ...route,
-        } satisfies RoadRoute;
-      })
-    )
-      .then((routes) => {
-        if (!controller.signal.aborted) setRoadRoutes(routes);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setRoadRoutes([]);
-      });
+      for (let i = 0; i < routeRequests.length; i += MAX_ROUTE_CONCURRENCY) {
+        const chunk = routeRequests.slice(i, i + MAX_ROUTE_CONCURRENCY);
+        const chunkRoutes = await Promise.all(
+          chunk.map(async (request) => {
+            const route = await fetchRoadRoute(request, controller.signal);
+            return {
+              deviceId: request.deviceId,
+              deviceName: request.deviceName,
+              selected: request.selected,
+              ...route,
+            } satisfies RoadRoute;
+          })
+        );
+
+        if (controller.signal.aborted) return;
+        routes.push(...chunkRoutes);
+      }
+
+      if (!controller.signal.aborted) {
+        startTransition(() => {
+          setRoadRoutes(routes);
+        });
+      }
+    };
+
+    loadRoutes().catch(() => {
+      if (!controller.signal.aborted) {
+        startTransition(() => {
+          setRoadRoutes([]);
+        });
+      }
+    });
 
     return () => controller.abort();
-  }, [routeRequests]);
+  }, [routeRequestKey, routeRequests]);
 
   return (
     <section
