@@ -1,6 +1,7 @@
 #include "gps.h"
 #include "DATAEG/SIM7680C.h"
 #include "assistnow/assistnow.h"
+#include "network_location/location.h"
 #include <WiFi.h>
 #include <cstring>
 #include <ctime>
@@ -356,6 +357,7 @@ static bool tryInjectTimeFromSources() {
 static bool tryInjectPositionFromNVS() {
   double lat = GPS_LAT;
   double lng = GPS_LNG;
+  bool usedHomeFallback = false;
 
   if (lat == 0.0 && lng == 0.0) {
     // Fallback: try HOME coords
@@ -363,6 +365,7 @@ static bool tryInjectPositionFromNVS() {
     getConfigSnapshot(&cfg);
     lat = cfg.homeLat;
     lng = cfg.homeLng;
+    usedHomeFallback = (lat != 0.0 || lng != 0.0);
   }
 
   if (lat == 0.0 && lng == 0.0) {
@@ -397,6 +400,38 @@ static bool tryInjectPositionFromNVS() {
     GPS_injectApproxPosition(lat, lng, 50000);
   }
 
+  if (usedHomeFallback) {
+    logLine("[GPS] HOME fallback injected; will still try better network aiding");
+    return false;
+  }
+
+  return true;
+}
+
+static bool tryInjectPositionFromNetwork() {
+  logLine("[GPS] Trying network-based coarse position for faster fix...");
+  if (!acquireNetworkLocationNow()) {
+    logLine("[GPS] Network location unavailable for GPS aiding");
+    return false;
+  }
+
+  TelemetrySnapshot telem = {};
+  getTelemetrySnapshot(&telem);
+  if (!telem.networkLocReady ||
+      (telem.networkLocLat == 0.0 && telem.networkLocLng == 0.0)) {
+    logLine("[GPS] Network location result invalid");
+    return false;
+  }
+
+  uint32_t accM = (telem.networkLocAccuracyM > 100.0f)
+                      ? (uint32_t)telem.networkLocAccuracyM
+                      : 100U;
+  if (accM > 100000U)
+    accM = 100000U;
+
+  GPS_injectApproxPosition(telem.networkLocLat, telem.networkLocLng, accM);
+  logPrintf("[GPS] Network aiding source=%s acc=%um",
+            locationSourceName(telem.networkLocSource), accM);
   return true;
 }
 
@@ -426,8 +461,8 @@ void gpsTask(void *pvParameters) {
 
   vTaskDelay(pdMS_TO_TICKS(500));
 
-  // 1) Inject approximate position (from NVS, no internet needed)
-  tryInjectPositionFromNVS();
+  // 1) Inject approximate position from last known fix/home, if available.
+  bool positionInjected = tryInjectPositionFromNVS();
 
   // 2) Inject approximate time — first attempt (optimistic)
   //    At cold boot, NTP likely hasn't synced and SIM may not be ready.
@@ -444,7 +479,13 @@ void gpsTask(void *pvParameters) {
     timeInjected = tryInjectTimeFromSources();
   }
 
-  // 5) Download + inject AssistNow
+  // 5) If we still do not have a recent coarse position, obtain one from the
+  // network now and inject it before AssistNow + sky search continue.
+  if (!positionInjected && transport != 0) {
+    positionInjected = tryInjectPositionFromNetwork();
+  }
+
+  // 6) Download + inject AssistNow
   {
     bool downloaded = false;
 
@@ -483,7 +524,7 @@ void gpsTask(void *pvParameters) {
               telem.assistReady ? 1 : 0);
   }
 
-  // 6) Configure GPS (only after baud locked)
+  // 7) Configure GPS (only after baud locked)
   logPrintf("[GPS] Configuring at %ld baud...", baud);
   sendUBX(CFG_NMEA_UART1, sizeof(CFG_NMEA_UART1));
   vTaskDelay(20);
@@ -498,7 +539,7 @@ void gpsTask(void *pvParameters) {
   vTaskDelay(20);
   logLine("[GPS] Configuration DONE");
 
-  // 6) NMEA read loop
+  // 8) NMEA read loop
   while (true) {
     while (SerialGPS.available())
       gps.encode(SerialGPS.read());

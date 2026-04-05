@@ -87,6 +87,16 @@ static inline void unlockTelemetry() {
     xSemaphoreGive(telemetryMutex);
 }
 
+static bool isValidCoordPair(double lat, double lng) {
+  if (lat < -90.0 || lat > 90.0)
+    return false;
+  if (lng < -180.0 || lng > 180.0)
+    return false;
+  if (lat == 0.0 && lng == 0.0)
+    return false;
+  return true;
+}
+
 static void syncLegacyUnlocked() {
   strncpy(PHONE, CALL_1, sizeof(PHONE) - 1);
   PHONE[sizeof(PHONE) - 1] = '\0';
@@ -370,7 +380,7 @@ BestLocationResult getBestAvailableLocation() {
 
   // 1) GPS — best accuracy, but only if we have a recent fix
   if (telem.gpsReady) {
-    if (GPS_LAT != 0.0 || GPS_LNG != 0.0) {
+    if (isValidCoordPair(GPS_LAT, GPS_LNG)) {
       result.lat = GPS_LAT;
       result.lng = GPS_LNG;
       result.accuracyM = 10.0f; // NEO-M10 typical
@@ -383,7 +393,8 @@ BestLocationResult getBestAvailableLocation() {
   }
 
   // 2) Network location (WiFi or Cell geolocation)
-  if (telem.networkLocReady && telem.networkLocAtMs > 0) {
+  if (telem.networkLocReady && telem.networkLocAtMs > 0 &&
+      isValidCoordPair(telem.networkLocLat, telem.networkLocLng)) {
     unsigned long age = now - telem.networkLocAtMs;
     if (age < 300000UL) { // < 5 minutes
       result.lat = telem.networkLocLat;
@@ -397,7 +408,7 @@ BestLocationResult getBestAvailableLocation() {
   }
 
   // 3) HOME fallback
-  bool hasHome = (cfg.homeLat != 0.0 || cfg.homeLng != 0.0);
+  bool hasHome = isValidCoordPair(cfg.homeLat, cfg.homeLng);
   if (hasHome) {
     result.lat = cfg.homeLat;
     result.lng = cfg.homeLng;

@@ -24,4 +24,5 @@
 // Log tag: [NETLOC]
 // ============================================================
 
+bool acquireNetworkLocationNow();
 void networkLocationTask(void *pvParameters);

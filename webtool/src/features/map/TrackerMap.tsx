@@ -65,8 +65,8 @@ export function TrackerMap({
             center={[device.lat, device.lng]}
             radius={device.deviceId === selectedDeviceId ? 11 : 8}
             pathOptions={{
-              color: device.online ? "#1fd7a3" : "#f97316",
-              fillColor: device.deviceId === selectedDeviceId ? "#facc15" : "#1fd7a3",
+              color: device.online ? "#00c8ff" : "#f97316",
+              fillColor: device.deviceId === selectedDeviceId ? "#6366f1" : "#00b4ff",
               fillOpacity: 0.9,
               weight: 2,
             }}
@@ -83,7 +83,7 @@ export function TrackerMap({
         {visibleHistory.length > 1 ? (
           <Polyline
             positions={visibleHistory.map((point) => [point.lat, point.lng])}
-            pathOptions={{ color: "#facc15", weight: 4, opacity: 0.8 }}
+            pathOptions={{ color: "#6366f1", weight: 4, opacity: 0.8 }}
           />
         ) : null}
 
@@ -93,8 +93,8 @@ export function TrackerMap({
             center={[point.lat, point.lng]}
             radius={4}
             pathOptions={{
-              color: "#ffe085",
-              fillColor: "#ffe085",
+              color: "#818cf8",
+              fillColor: "#818cf8",
               fillOpacity: 0.65,
               weight: 1,
             }}
@@ -109,8 +109,8 @@ export function TrackerMap({
               center={[selectedDevice.homeLat, selectedDevice.homeLng]}
               radius={7}
               pathOptions={{
-                color: "#7dd3fc",
-                fillColor: "#7dd3fc",
+                color: "#38bdf8",
+                fillColor: "#38bdf8",
                 fillOpacity: 0.9,
                 weight: 2,
               }}
@@ -122,9 +122,9 @@ export function TrackerMap({
                 center={[selectedDevice.homeLat, selectedDevice.homeLng]}
                 radius={selectedDevice.geoRadiusM}
                 pathOptions={{
-                  color: "#7dd3fc",
+                  color: "#38bdf8",
                   opacity: 0.7,
-                  fillColor: "#7dd3fc",
+                  fillColor: "#38bdf8",
                   fillOpacity: 0.08,
                 }}
               />

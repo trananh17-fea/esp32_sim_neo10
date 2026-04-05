@@ -41,6 +41,8 @@ void SIM7680C_callCascade(); // CALL_1 -> CALL_2 -> CALL_3 -> HOTLINE
 // --- HTTP ---
 bool SIM7680C_httpPost(const String &url, const String &contentType,
                        const String &body);
+bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
+                                   const String &body, String &outResponse);
 
 // HTTP GET via SIM modem — downloads binary content and saves to LittleFS file.
 // Returns number of bytes downloaded, or 0 on failure.
@@ -51,6 +53,9 @@ int SIM7680C_httpGetToFile(const String &url, const char *filePath);
 // Returns true if valid time was parsed. Output is UTC.
 bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour,
                         int *minute, int *second);
+
+// --- Cell info ---
+bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio);
 
 // --- Signal ---
 bool sim_isRegistered();

@@ -156,12 +156,14 @@ export function App() {
   return (
     <div className="shell">
       <aside className="shell__sidebar">
+        {/* Brand header */}
         <div className="brand">
           <p className="eyebrow">{copy.appEyebrow}</p>
           <h1>{copy.appTitle}</h1>
           <p className="muted">{copy.appDescription}</p>
         </div>
 
+        {/* Locale + Theme controls */}
         <div className="panel control-panel">
           <div className="control-group">
             <span className="detail-label">{copy.languageLabel}</span>
@@ -204,19 +206,24 @@ export function App() {
           </div>
         </div>
 
-        <div className="range-picker">
-          {rangeOptions.map((option) => (
-            <button
-              key={option}
-              className={option === historyRange ? "range-pill is-active" : "range-pill"}
-              onClick={() => setHistoryRange(option)}
-              type="button"
-            >
-              {copy.rangeLabels[option]}
-            </button>
-          ))}
+        {/* History time range */}
+        <div className="control-group">
+          <span className="detail-label">{copy.movementHistory}</span>
+          <div className="range-picker">
+            {rangeOptions.map((option) => (
+              <button
+                key={option}
+                className={option === historyRange ? "range-pill is-active" : "range-pill"}
+                onClick={() => setHistoryRange(option)}
+                type="button"
+              >
+                {copy.rangeLabels[option]}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Device list */}
         <DeviceSidebar
           copy={copy}
           devices={devices}
@@ -231,6 +238,7 @@ export function App() {
       </aside>
 
       <main className="shell__main">
+        {/* Hero header */}
         <section className="hero-card">
           <div className="hero-card__top">
             <div>
