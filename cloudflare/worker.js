@@ -451,6 +451,107 @@ export default {
             }
         }
 
+        // POST /api/device/home — set or clear the home position for a device (from webtool)
+        if (request.method === "POST" && url.pathname === "/api/device/home") {
+            try {
+                const data = await request.json();
+                const deviceId = normalizeDeviceId(data.deviceId);
+                if (!deviceId) {
+                    return jsonResponse({ error: "Missing deviceId" }, corsHeaders, 400);
+                }
+
+                const clear = normalizeBoolean(data.clear, false);
+
+                const current = await getResolvedSnapshot(env, deviceId);
+                if (!current) {
+                    return jsonResponse({ error: "Device not found" }, corsHeaders, 404);
+                }
+
+                let updatedSnapshot;
+
+                if (clear) {
+                    // Remove home fields
+                    updatedSnapshot = { ...current };
+                    delete updatedSnapshot.ageSeconds;
+                    delete updatedSnapshot.online;
+                    updatedSnapshot.homeSet = false;
+                    updatedSnapshot.homeLat = null;
+                    updatedSnapshot.homeLng = null;
+                    updatedSnapshot.geoEnabled = false;
+                    updatedSnapshot.distanceToHomeM = -1;
+                    updatedSnapshot.insideGeofence = false;
+                } else {
+                    const homeLat = normalizeNumber(data.homeLat);
+                    const homeLng = normalizeNumber(data.homeLng);
+
+                    if (!isValidCoordPair(homeLat, homeLng)) {
+                        return jsonResponse(
+                            { error: "Invalid or missing homeLat / homeLng" },
+                            corsHeaders,
+                            400
+                        );
+                    }
+
+                    // Compute straight-line distance from device to new home
+                    const R = 6371000; // metres
+                    const toRad = (d) => (d * Math.PI) / 180;
+                    const dLat = toRad(homeLat - current.lat);
+                    const dLng = toRad(homeLng - current.lng);
+                    const a =
+                        Math.sin(dLat / 2) ** 2 +
+                        Math.cos(toRad(current.lat)) *
+                            Math.cos(toRad(homeLat)) *
+                            Math.sin(dLng / 2) ** 2;
+                    const distanceToHomeM = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                    const geoRadiusM = normalizeNumber(data.geoRadiusM);
+                    const geoEnabled =
+                        geoRadiusM !== null && geoRadiusM > 0
+                            ? true
+                            : normalizeBoolean(data.geoEnabled, current.geoEnabled ?? false);
+
+                    updatedSnapshot = {
+                        ...current,
+                        homeSet: true,
+                        homeLat,
+                        homeLng,
+                        distanceToHomeM: Math.round(distanceToHomeM),
+                        insideGeofence:
+                            geoEnabled && geoRadiusM
+                                ? distanceToHomeM <= geoRadiusM
+                                : current.insideGeofence ?? false,
+                        geoEnabled,
+                        geoRadiusM: geoRadiusM ?? current.geoRadiusM ?? 0,
+                    };
+                    delete updatedSnapshot.ageSeconds;
+                    delete updatedSnapshot.online;
+                }
+
+                await env.TRACKER_KV.put(
+                    `${TRACKER_PREFIX}${deviceId}`,
+                    JSON.stringify(updatedSnapshot)
+                );
+
+                return jsonResponse(
+                    {
+                        ok: true,
+                        deviceId,
+                        homeSet: updatedSnapshot.homeSet,
+                        homeLat: updatedSnapshot.homeLat ?? null,
+                        homeLng: updatedSnapshot.homeLng ?? null,
+                        distanceToHomeM: updatedSnapshot.distanceToHomeM ?? -1,
+                    },
+                    corsHeaders
+                );
+            } catch (error) {
+                return jsonResponse(
+                    { error: error instanceof Error ? error.message : "Unknown error" },
+                    corsHeaders,
+                    500
+                );
+            }
+        }
+
         if (request.method === "GET" && url.pathname === "/api/devices") {
             const deviceIds = await listKnownDeviceIds(env);
             const devices = await Promise.all(
@@ -548,6 +649,7 @@ export default {
                         "/api/location",
                         "/api/history",
                         "/api/device/rename",
+                        "/api/device/home",
                     ],
                 },
                 corsHeaders

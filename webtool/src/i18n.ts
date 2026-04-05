@@ -46,6 +46,29 @@ export type AppCopy = {
   lastUpdated: string;
   homeLabel: string;
   rangeLabels: Record<"30m" | "6h" | "24h" | "7d", string>;
+  // Home panel
+  homePanel: string;
+  homePanelDesc: string;
+  setHomeBtn: string;
+  clearHomeBtn: string;
+  pickOnMapBtn: string;
+  pickOnMapHint: string;
+  latPlaceholder: string;
+  lngPlaceholder: string;
+  homeSaved: string;
+  homeCleared: string;
+  homeSaving: string;
+  routeToHome: string;
+  routeModeOff: string;
+  routeModeSelected: string;
+  routeModeAll: string;
+  historyToggle: string;
+  straightLine: string;
+  distanceLabel: string;
+  bearingLabel: string;
+  useCurrentPos: string;
+  geoRadiusLabel: string;
+  geoRadiusHint: string;
 };
 
 export const translations: Record<Locale, AppCopy> = {
@@ -102,6 +125,28 @@ export const translations: Record<Locale, AppCopy> = {
       "24h": "24 hours",
       "7d": "7 days",
     },
+    homePanel: "Home Location",
+    homePanelDesc: "Set a home point for this device. You can type coordinates or click \"Pick on map\" then click anywhere on the map.",
+    setHomeBtn: "Set Home",
+    clearHomeBtn: "Clear Home",
+    pickOnMapBtn: "Pick on map",
+    pickOnMapHint: "Click anywhere on the map to set home…",
+    latPlaceholder: "Latitude (e.g. 10.9011)",
+    lngPlaceholder: "Longitude (e.g. 106.8062)",
+    homeSaved: "Home saved ✓",
+    homeCleared: "Home cleared",
+    homeSaving: "Saving…",
+    routeToHome: "Route to Home",
+    routeModeOff: "Route: Off",
+    routeModeSelected: "Route: Selected Device",
+    routeModeAll: "Route: All Devices",
+    historyToggle: "History",
+    straightLine: "Straight line",
+    distanceLabel: "Distance",
+    bearingLabel: "Bearing",
+    useCurrentPos: "Use current position",
+    geoRadiusLabel: "Geofence radius (m)",
+    geoRadiusHint: "Leave 0 to disable geofence",
   },
   vi: {
     appEyebrow: "NEO10 Fleet",
@@ -156,6 +201,28 @@ export const translations: Record<Locale, AppCopy> = {
       "24h": "24 giờ",
       "7d": "7 ngày",
     },
+    homePanel: "Vị trí HOME",
+    homePanelDesc: "Đặt vị trí HOME cho thiết bị này. Nhập tọa độ hoặc nhấn \"Chọn trên map\" rồi click vào vị trí trên bản đồ.",
+    setHomeBtn: "Đặt HOME",
+    clearHomeBtn: "Xóa HOME",
+    pickOnMapBtn: "Chọn trên map",
+    pickOnMapHint: "Nhấn vào bản đồ để chọn vị trí HOME…",
+    latPlaceholder: "Vĩ độ (vd: 10.9011)",
+    lngPlaceholder: "Kinh độ (vd: 106.8062)",
+    homeSaved: "Đã lưu HOME ✓",
+    homeCleared: "Đã xóa HOME",
+    homeSaving: "Đang lưu…",
+    routeToHome: "Đường về HOME",
+    routeModeOff: "Chỉ đường: Tắt",
+    routeModeSelected: "Chỉ đường: Thiết bị chọn",
+    routeModeAll: "Chỉ đường: Tất cả",
+    historyToggle: "Lịch sử",
+    straightLine: "Đường thẳng",
+    distanceLabel: "Khoảng cách",
+    bearingLabel: "Hướng",
+    useCurrentPos: "Dùng vị trí hiện tại",
+    geoRadiusLabel: "Bán kính hàng rào (m)",
+    geoRadiusHint: "Để 0 để tắt hàng rào địa lý",
   },
 };
 

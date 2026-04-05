@@ -9,6 +9,7 @@
 #include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
+#include <math.h>
 
 static AsyncWebServer server(80);
 static DNSServer dnsServer;
@@ -55,6 +56,7 @@ input,textarea{width:100%;padding:12px 14px;background:#0b1222;border:1px solid 
 input:focus,textarea:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
 input::placeholder,textarea::placeholder{color:#64748b}
 textarea{resize:vertical;font-family:inherit;min-height:66px}
+.coords{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .bt{display:block;width:100%;padding:14px;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;transition:transform .15s,opacity .15s;letter-spacing:.2px}
 .bt:active{transform:scale(.98)}
 .bt:disabled{opacity:.35;cursor:not-allowed;transform:none}
@@ -97,6 +99,10 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
     <div class=kv><span>HOME</span><b id=home>Chưa có</b></div>
     <div class=kv><span>Khoảng cách tới HOME</span><b id=dist>--</b></div>
     <div class=kv><span>Geofence</span><b id=geo>--</b></div>
+    <div class=coords>
+      <input id=hlat type=number step=any placeholder="Home lat vÃ­ dá»¥ 10.901146">
+      <input id=hlng type=number step=any placeholder="Home lng vÃ­ dá»¥ 106.806184">
+    </div>
     <div class=sub>• <b>Lưu HOME</b> sẽ lấy vị trí hiện tại làm “nhà” (ưu tiên GPS > WiFi > Cell).</div>
     <div class=sub>• Trạng thái chi tiết (GPS/sóng/cảnh báo) xem ở Serial log.</div>
   </div>
@@ -114,8 +120,10 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
 var $=function(i){return document.getElementById(i)};
 function toast(m,ok){var t=$('tt');t.textContent=m;t.className='tt '+(ok?'s':'e');setTimeout(function(){t.className='tt'},2500)}
 function N(p){p=(p||'').trim();if(p.charAt(0)==='0'&&p.length>8)return'+84'+p.substring(1);return p}
+function H(){var lat=($('hlat').value||'').trim(),lng=($('hlng').value||'').trim();return lat!==''&&lng!==''}
+function hb(locValid){$('bh').disabled=!(locValid||H())}
 function init(){fetch('/config').then(function(r){return r.json()}).then(function(c){
-  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||''
+  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
 }).catch(function(){})}
 function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
   var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value);
@@ -124,7 +132,7 @@ function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
     .catch(function(){toast('Không thể lưu',false)})
     .finally(function(){b.disabled=false;b.textContent='Lưu cấu hình'})}
 function sh(){var b=$('bh');b.disabled=true;b.textContent='Đang lưu...';
-  fetch('/save_home',{method:'POST'}).then(function(r){return r.json()}).then(function(j){
+  var lat=($('hlat').value||'').trim(),lng=($('hlng').value||'').trim(),body=(lat&&lng)?('lat='+encodeURIComponent(lat)+'&lng='+encodeURIComponent(lng)):'';fetch('/save_home',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){return r.json()}).then(function(j){
     toast(j.ok?'Đã lưu HOME!':(j.msg||'Chưa có vị trí hợp lệ'),('ok' in j&&j.ok))
   }).catch(function(){toast('Không thể lưu',false)})
     .finally(function(){b.disabled=false;b.textContent='Lưu HOME'})}
@@ -140,8 +148,9 @@ function poll(){fetch('/status').then(function(r){return r.json()}).then(functio
   $('home').textContent=s.has_home?'Đã có':'Chưa có';
   $('dist').textContent=dOk?(Math.round(s.dist)+' m'):'--';
   $('geo').textContent=s.geo_en?('Bật • bán kính '+s.geo_rad+'m'):'Tắt';
-  $('bh').disabled=!s.loc_valid;
+  hb(s.loc_valid);
 }).catch(function(){})}
+['hlat','hlng'].forEach(function(id){$(id).addEventListener('input',function(){hb(false)})});
 init();poll();setInterval(poll,2000);
 </script></body></html>
 )HTML";
@@ -173,6 +182,8 @@ void initFriendlyNamePortal() {
                "\","
                "\"home\":" +
                String((cfg.homeLat != 0 || cfg.homeLng != 0) ? "true" : "false") +
+               ",\"home_lat\":" + String(cfg.homeLat, 6) +
+               ",\"home_lng\":" + String(cfg.homeLng, 6) +
                ",\"geo_en\":" + String(cfg.geofenceEnable ? "true" : "false") +
                ",\"geo_rad\":" + String(cfg.geofenceRadiusM) +
                "}";
@@ -211,6 +222,31 @@ void initFriendlyNamePortal() {
 
   // --- POST /save_home → save current location as HOME ---
   server.on("/save_home", HTTP_POST, [](AsyncWebServerRequest *r) {
+    const bool hasLat = r->hasParam("lat", true);
+    const bool hasLng = r->hasParam("lng", true);
+    if (hasLat || hasLng) {
+      if (!(hasLat && hasLng)) {
+        r->send(200, "application/json",
+                "{\"ok\":false,\"msg\":\"C\u1ea7n nh\u1eadp \u0111\u1ee7 lat v\u00e0 lng\"}");
+        return;
+      }
+      const String latStr = r->getParam("lat", true)->value();
+      const String lngStr = r->getParam("lng", true)->value();
+      const double lat = atof(latStr.c_str());
+      const double lng = atof(lngStr.c_str());
+      const bool valid = isfinite(lat) && isfinite(lng) && lat >= -90.0 &&
+                         lat <= 90.0 && lng >= -180.0 && lng <= 180.0 &&
+                         !(lat == 0.0 && lng == 0.0);
+      if (!valid) {
+        r->send(200, "application/json",
+                "{\"ok\":false,\"msg\":\"T\u1ecda \u0111\u1ed9 HOME kh\u00f4ng h\u1ee3p l\u1ec7\"}");
+        return;
+      }
+      saveHomeLocation(lat, lng);
+      r->send(200, "application/json", "{\"ok\":true}");
+      return;
+    }
+
     BestLocationResult loc = getBestAvailableLocation();
     if (!loc.valid) {
       r->send(200, "application/json", "{\"ok\":false,\"msg\":\"Kh\u00f4ng c\u00f3 v\u1ecb tr\u00ed h\u1ee3p l\u1ec7\"}");

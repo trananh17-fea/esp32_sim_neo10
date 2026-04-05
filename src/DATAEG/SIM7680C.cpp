@@ -736,6 +736,15 @@ bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour, int *minute,
   // Note: day rollover across months not handled perfectly,
   // but the time accuracy (2s) makes this acceptable
 
+  // Sanity check
+  if (fullYear < 2024 || fullYear > 2035 || mo < 1 || mo > 12 || dd < 1 ||
+      dd > 31 || hh < 0 || hh > 23 || mn < 0 || mn > 59 || ss < 0 ||
+      ss > 59) {
+    logPrintf("[SIM] Rejecting implausible network time: %04d-%02d-%02d %02d:%02d:%02d",
+              fullYear, mo, dd, hh, mn, ss);
+    return false;
+  }
+
   *year = fullYear;
   *month = mo;
   *day = dd;
@@ -745,12 +754,6 @@ bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour, int *minute,
 
   logPrintf("[SIM] Network time (UTC): %04d-%02d-%02d %02d:%02d:%02d", fullYear,
             mo, dd, hh, mn, ss);
-
-  // Sanity check
-  if (fullYear < 2024 || mo < 1 || mo > 12 || dd < 1 || dd > 31) {
-    logLine("[SIM] Network time failed sanity check");
-    return false;
-  }
 
   return true;
 }

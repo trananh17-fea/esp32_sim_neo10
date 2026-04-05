@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { DeviceDetails } from "../features/devices/DeviceDetails";
 import { DeviceSidebar } from "../features/devices/DeviceSidebar";
+import { HomePanel, type HomePickMode } from "../features/home/HomePanel";
 import { HistoryTimeline } from "../features/history/HistoryTimeline";
-import { TrackerMap } from "../features/map/TrackerMap";
+import { TrackerMap, type RouteMode } from "../features/map/TrackerMap";
 import {
   formatTimestamp,
   translations,
@@ -52,6 +53,13 @@ export function App() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 
+  // Map & Home feature state
+  const [showHistory, setShowHistory] = useState(true);
+  const [routeMode, setRouteMode] = useState<"off" | "selected" | "all">("off");
+  const [pickMode, setPickMode] = useState<HomePickMode>("idle");
+  const [pendingPick, setPendingPick] = useState<{ lat: number; lng: number } | null>(null);
+  const [draftHome, setDraftHome] = useState<{ lat: number; lng: number } | null>(null);
+
   const copy = translations[locale];
 
   useEffect(() => {
@@ -63,7 +71,6 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-
     const loadDevices = async () => {
       try {
         if (!cancelled) setLoadingDevices(true);
@@ -78,14 +85,15 @@ export function App() {
         setError(null);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message :
-            locale === "vi" ? "Không tải được danh sách thiết bị." : "Failed to load devices.");
+          setError(
+            err instanceof Error ? err.message :
+              locale === "vi" ? "Không tải được danh sách thiết bị." : "Failed to load devices."
+          );
         }
       } finally {
         if (!cancelled) setLoadingDevices(false);
       }
     };
-
     loadDevices();
     const timer = window.setInterval(loadDevices, REFRESH_INTERVAL_MS);
     return () => { cancelled = true; window.clearInterval(timer); };
@@ -98,7 +106,6 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-
     const loadHistory = async () => {
       if (!selectedDeviceId) { setHistory([]); return; }
       try {
@@ -107,17 +114,24 @@ export function App() {
         if (!cancelled) setHistory(points);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message :
-            locale === "vi" ? "Không tải được lịch sử." : "Failed to load history.");
+          setError(
+            err instanceof Error ? err.message :
+              locale === "vi" ? "Không tải được lịch sử." : "Failed to load history."
+          );
         }
       } finally {
         if (!cancelled) setLoadingHistory(false);
       }
     };
-
     loadHistory();
     return () => { cancelled = true; };
   }, [locale, selectedDeviceId, historyRange]);
+
+  // Cancel pick when device changes
+  useEffect(() => {
+    setPickMode("idle");
+    setPendingPick(null);
+  }, [selectedDeviceId]);
 
   const handleRename = async (deviceId: string, nextName: string) => {
     const trimmed = nextName.trim();
@@ -128,31 +142,53 @@ export function App() {
     );
   };
 
+  /** When user clicks the map in pick mode */
+  const handleMapClick = (lat: number, lng: number) => {
+    setPendingPick({ lat, lng });
+    setPickMode("idle"); // auto-exit pick mode after pick
+  };
+
+  /** When home is saved, update local device state optimistically */
+  const handleHomeSaved = (homeLat: number, homeLng: number, distanceToHomeM: number) => {
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.deviceId === selectedDeviceId
+          ? { ...d, homeSet: true, homeLat, homeLng, distanceToHomeM }
+          : d
+      )
+    );
+  };
+
+  /** When home is cleared */
+  const handleHomeCleared = () => {
+    setDevices((prev) =>
+      prev.map((d) =>
+        d.deviceId === selectedDeviceId
+          ? { ...d, homeSet: false, homeLat: undefined, homeLng: undefined, distanceToHomeM: -1, geoEnabled: false }
+          : d
+      )
+    );
+  };
+
   const onlineCount = devices.filter((d) => d.online).length;
 
   return (
     <>
-      {/* ── TOP NAVBAR ───────────────────────────────────────────────── */}
+      {/* ── TOP NAVBAR ─────────────────────────────────────────────── */}
       <nav className="navbar">
-        {/* Brand */}
         <div className="navbar__brand">
           <div className="navbar__logo">N</div>
-          <div>
-            <div className="navbar__title">NEO10</div>
-          </div>
+          <div className="navbar__title">NEO10</div>
         </div>
 
         <div className="navbar__sep" />
 
-        {/* Center nav */}
         <div className="navbar__center">
           <button className="navbar__nav-item is-active" type="button">
-            <span>⬡</span>
-            {copy.liveMap}
+            <span>⬡</span> {copy.liveMap}
           </button>
         </div>
 
-        {/* Right controls */}
         <div className="navbar__right">
           {lastUpdatedAt ? (
             <div className="refresh-badge">
@@ -161,23 +197,17 @@ export function App() {
             </div>
           ) : null}
 
-          {/* Language toggle */}
           <div className="toggle-group" style={{ width: "auto" }}>
             <button
               className={locale === "vi" ? "toggle-button is-active" : "toggle-button"}
-              onClick={() => setLocale("vi")}
-              type="button"
-              title={copy.vietnameseLabel}
+              onClick={() => setLocale("vi")} type="button" title={copy.vietnameseLabel}
             >VI</button>
             <button
               className={locale === "en" ? "toggle-button is-active" : "toggle-button"}
-              onClick={() => setLocale("en")}
-              type="button"
-              title={copy.englishLabel}
+              onClick={() => setLocale("en")} type="button" title={copy.englishLabel}
             >EN</button>
           </div>
 
-          {/* Theme toggle */}
           <button
             className="icon-btn"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -189,10 +219,10 @@ export function App() {
         </div>
       </nav>
 
-      {/* ── SHELL ────────────────────────────────────────────────────── */}
+      {/* ── SHELL ──────────────────────────────────────────────────── */}
       <div className="shell">
 
-        {/* SIDEBAR */}
+        {/* ── SIDEBAR ──────────────────────────────────────────────── */}
         <aside className="shell__sidebar">
 
           {/* Fleet overview */}
@@ -207,10 +237,9 @@ export function App() {
                   <div className="muted" style={{ marginTop: 2 }}>{copy.appDescription.split(",")[0]}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{
-                    fontSize: "1.2rem", fontWeight: 800, color: "var(--cyan-400)",
-                    lineHeight: 1, letterSpacing: "-0.04em"
-                  }}>{onlineCount}</div>
+                  <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--cyan-400)", lineHeight: 1, letterSpacing: "-0.04em" }}>
+                    {onlineCount}
+                  </div>
                   <div className="muted" style={{ marginTop: 2 }}>{copy.online}</div>
                 </div>
               </div>
@@ -227,8 +256,7 @@ export function App() {
                 <button
                   key={opt}
                   className={opt === historyRange ? "range-pill is-active" : "range-pill"}
-                  onClick={() => setHistoryRange(opt)}
-                  type="button"
+                  onClick={() => setHistoryRange(opt)} type="button"
                 >
                   {copy.rangeLabels[opt]}
                 </button>
@@ -240,25 +268,26 @@ export function App() {
 
           {/* Device list */}
           <div className="sidebar-section" style={{ flex: 1 }}>
-            <div className="sidebar-label">
-              {copy.selectedDevice} ({devices.length})
-            </div>
+            <div className="sidebar-label">{copy.selectedDevice} ({devices.length})</div>
             <DeviceSidebar
-              copy={copy}
-              devices={devices}
-              locale={locale}
-              loading={loadingDevices}
-              selectedDeviceId={selectedDeviceId}
+              copy={copy} devices={devices} locale={locale}
+              loading={loadingDevices} selectedDeviceId={selectedDeviceId}
               onSelect={setSelectedDeviceId}
             />
-            {!loadingDevices && !error && !devices.length ? (
+            {!loadingDevices && !error && !devices.length && (
               <p className="panel-note">{copy.noDevicesHint}</p>
-            ) : null}
+            )}
+          </div>
+
+          {/* Footer Credits */}
+          <div className="sidebar-footer">
+            <p>© {new Date().getFullYear()} <strong>Vũ Đăng Thanh</strong>. All rights reserved.</p>
+            <p>Leader: <strong>TA DIY</strong></p>
           </div>
 
         </aside>
 
-        {/* MAIN */}
+        {/* ── MAIN ─────────────────────────────────────────────────── */}
         <main className="shell__main">
 
           {/* Hero header */}
@@ -269,34 +298,72 @@ export function App() {
                 <h2>{copy.liveMapTitle}</h2>
                 <p className="muted" style={{ marginTop: 6 }}>{copy.liveMapDescription}</p>
               </div>
-              {lastUpdatedAt || devices.length ? (
-                <div className="hero-meta">
-                  {devices.length > 0 && (
-                    <span className="stat-badge">
-                      ◉ {onlineCount}/{devices.length} {copy.online}
-                    </span>
-                  )}
-                  {lastUpdatedAt && (
-                    <span className="hero-meta__pill">
-                      ↻ {copy.lastUpdated}: {formatTimestamp(lastUpdatedAt, locale)}
-                    </span>
-                  )}
-                </div>
-              ) : null}
+              <div className="hero-meta">
+                {devices.length > 0 && (
+                  <span className="stat-badge">◉ {onlineCount}/{devices.length} {copy.online}</span>
+                )}
+                {lastUpdatedAt && (
+                  <span className="hero-meta__pill">↻ {copy.lastUpdated}: {formatTimestamp(lastUpdatedAt, locale)}</span>
+                )}
+                {/* Display mode toggle */}
+                {devices.length > 0 && (
+                  <div className="map-mode-toggle">
+                    <button
+                      className={showHistory ? "map-mode-btn is-active" : "map-mode-btn"}
+                      type="button"
+                      onClick={() => setShowHistory(p => !p)}
+                    >
+                      🛤 {copy.historyToggle}
+                    </button>
+                    <div className="map-mode-divider" />
+                    <select
+                      className="map-mode-select"
+                      value={routeMode}
+                      onChange={(e) => setRouteMode(e.target.value as any)}
+                    >
+                      <option value="off">🛑 {copy.routeModeOff}</option>
+                      <option value="selected">🎯 {copy.routeModeSelected}</option>
+                      <option value="all">🌐 {copy.routeModeAll}</option>
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
-          {error ? <div className="error-banner">{error}</div> : null}
+          {error && <div className="error-banner">{error}</div>}
+
+          {/* Pick-mode floating hint bar */}
+          {pickMode === "picking" && (
+            <div className="pick-mode-bar">
+              <span className="pick-hint__dot" style={{ width: 8, height: 8 }} />
+              <span>{copy.pickOnMapHint}</span>
+              <button
+                className="pick-cancel-btn"
+                type="button"
+                onClick={() => setPickMode("idle")}
+              >✕ Cancel</button>
+            </div>
+          )}
 
           {/* Dashboard grid */}
           <div className="dashboard-grid">
+
+            {/* Map */}
             <TrackerMap
               devices={devices}
               history={history}
               homeLabel={copy.homeLabel}
               selectedDeviceId={selectedDeviceId}
               theme={theme}
+              pickMode={pickMode}
+              routeMode={routeMode}
+              showHistory={showHistory}
+              draftHome={draftHome}
+              onMapClick={handleMapClick}
             />
+
+            {/* Right stack */}
             <div className="dashboard-stack">
               <DeviceDetails
                 copy={copy}
@@ -304,6 +371,20 @@ export function App() {
                 loading={loadingDevices}
                 onRename={handleRename}
               />
+
+              {/* Home Panel */}
+              <HomePanel
+                copy={copy}
+                device={selectedDevice}
+                pickMode={pickMode}
+                pendingPick={pendingPick}
+                onStartPick={() => setPickMode("picking")}
+                onCancelPick={() => setPickMode("idle")}
+                onHomeSaved={handleHomeSaved}
+                onHomeCleared={handleHomeCleared}
+                onDraftChange={setDraftHome}
+              />
+
               <HistoryTimeline
                 copy={copy}
                 locale={locale}

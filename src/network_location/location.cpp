@@ -1,11 +1,14 @@
 #include "location.h"
 #include "DATAEG/SIM7680C.h"
+#include "GPS/gps.h"
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 
 static constexpr unsigned long NETLOC_RECHECK_WHEN_GPS_FRESH_MS = 300000UL;
 static constexpr unsigned long NETLOC_REFRESH_NO_GPS_MS = 1800000UL;
+static constexpr int NETLOC_MAX_WIFI_APS = 10;
 
 static bool isPlausibleCoord(double lat, double lng) {
   return lat >= -90.0 && lat <= 90.0 && lng >= -180.0 && lng <= 180.0 &&
@@ -29,6 +32,57 @@ static bool normalizeLocationPair(double *lat, double *lng) {
   }
 
   return false;
+}
+
+static int scanNearbyWiFi(String *googleJson, String *unwiredJson) {
+  if (!googleJson || !unwiredJson)
+    return 0;
+
+  *googleJson = "";
+  *unwiredJson = "";
+
+  logLine("[NETLOC] Scanning nearby WiFi BSSIDs...");
+  int n = WiFi.scanNetworks(false, false, false, 300);
+  if (n <= 0) {
+    logPrintf("[NETLOC] WiFi scan found %d APs", n);
+    WiFi.scanDelete();
+    return 0;
+  }
+
+  int count = 0;
+  int maxAPs = (n > NETLOC_MAX_WIFI_APS) ? NETLOC_MAX_WIFI_APS : n;
+  for (int i = 0; i < maxAPs; i++) {
+    const String bssid = WiFi.BSSIDstr(i);
+    const int rssi = WiFi.RSSI(i);
+    const int channel = WiFi.channel(i);
+    if (bssid.length() < 11)
+      continue;
+
+    if (count > 0) {
+      *googleJson += ",";
+      *unwiredJson += ",";
+    }
+
+    *googleJson += "{\"macAddress\":\"";
+    *googleJson += bssid;
+    *googleJson += "\",\"signalStrength\":";
+    *googleJson += String(rssi);
+    *googleJson += ",\"channel\":";
+    *googleJson += String(channel);
+    *googleJson += "}";
+
+    *unwiredJson += "{\"bssid\":\"";
+    *unwiredJson += bssid;
+    *unwiredJson += "\",\"signal\":";
+    *unwiredJson += String(rssi);
+    *unwiredJson += "}";
+
+    count++;
+  }
+
+  WiFi.scanDelete();
+  logPrintf("[NETLOC] Nearby WiFi APs usable=%d", count);
+  return count;
 }
 
 static bool parseLocationApiResponse(const String &response, double *lat,
@@ -98,19 +152,15 @@ static bool doWiFiGeolocation() {
     return false;
   }
 
-  logLine("[NETLOC] Scanning WiFi APs...");
-
-  // Scan APs (synchronous, returns when done)
-  int n = WiFi.scanNetworks(false, false, false, 300);
-  if (n <= 0) {
-    logPrintf("[NETLOC] Scan found %d APs", n);
-    WiFi.scanDelete();
+  // Build JSON body for Geolocation API
+  String googleWiFiJson;
+  String unwiredWiFiJson;
+  int count = scanNearbyWiFi(&googleWiFiJson, &unwiredWiFiJson);
+  if (count < 2) {
+    logLine("[NETLOC] Need at least 2 APs for WiFi geolocation");
     return false;
   }
 
-  logPrintf("[NETLOC] Found %d APs", n);
-
-  // Build JSON body for Geolocation API
   String body = "";
   bool isUnwired = (strcmp(cfg.netlocProvider, "unwiredlabs") == 0);
   
@@ -118,42 +168,12 @@ static bool doWiFiGeolocation() {
     body = "{\"token\":\"";
     body += cfg.netlocApiKey;
     body += "\",\"wifi\":[";
+    body += unwiredWiFiJson;
   } else {
     body = "{\"wifiAccessPoints\":[";
-  }
-
-  int count = 0;
-  int maxAPs = (n > 10) ? 10 : n; // limit to strongest 10
-
-  for (int i = 0; i < maxAPs; i++) {
-    if (count > 0)
-      body += ",";
-    
-    if (isUnwired) {
-      body += "{\"bssid\":\"";
-      body += WiFi.BSSIDstr(i);
-      body += "\",\"signal\":";
-      body += String(WiFi.RSSI(i));
-      body += "}";
-    } else {
-      body += "{\"macAddress\":\"";
-      body += WiFi.BSSIDstr(i);
-      body += "\",\"signalStrength\":";
-      body += String(WiFi.RSSI(i));
-      body += ",\"channel\":";
-      body += String(WiFi.channel(i));
-      body += "}";
-    }
-    count++;
+    body += googleWiFiJson;
   }
   body += isUnwired ? "],\"address\":1}" : "]}";
-
-  WiFi.scanDelete();
-
-  if (count < 2) {
-    logLine("[NETLOC] Need at least 2 APs for geolocation");
-    return false;
-  }
 
   // POST to Geolocation API
   String url = "";
@@ -199,6 +219,103 @@ static bool doWiFiGeolocation() {
             accuracy);
 
   telemetrySetNetworkLocation(lat, lng, accuracy, LOC_WIFI_GEO);
+  return true;
+}
+
+// ============================================================
+// Hybrid geolocation via SIM internet:
+// send serving cell + nearby WiFi BSSIDs in one request.
+// ============================================================
+static bool doHybridGeolocationViaSIMApi() {
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+
+  if (strlen(cfg.netlocApiKey) < 5) {
+    logLine("[NETLOC] No API key, skip hybrid geoloc");
+    return false;
+  }
+  if (!SIM_hasCapability(SIM_CAP_DATA_OK)) {
+    logLine("[NETLOC] SIM data not ready, skip hybrid geoloc");
+    return false;
+  }
+
+  int mcc = 0;
+  int mnc = 0;
+  int lac = 0;
+  int cellId = 0;
+  String radio = "gsm";
+  if (!SIM_getCellInfo(&mcc, &mnc, &lac, &cellId, &radio)) {
+    logLine("[NETLOC] No serving cell info for hybrid geoloc");
+    return false;
+  }
+
+  String googleWiFiJson;
+  String unwiredWiFiJson;
+  int wifiCount = scanNearbyWiFi(&googleWiFiJson, &unwiredWiFiJson);
+
+  bool isUnwired = (strcmp(cfg.netlocProvider, "unwiredlabs") == 0);
+  String url;
+  String body;
+
+  if (isUnwired) {
+    url = "https://us1.unwiredlabs.com/v2/process.php";
+    body = "{\"token\":\"";
+    body += cfg.netlocApiKey;
+    body += "\",\"radio\":\"";
+    body += radio;
+    body += "\",\"mcc\":";
+    body += String(mcc);
+    body += ",\"mnc\":";
+    body += String(mnc);
+    body += ",\"cells\":[{\"lac\":";
+    body += String(lac);
+    body += ",\"cid\":";
+    body += String(cellId);
+    body += "}],\"wifi\":[";
+    body += unwiredWiFiJson;
+    body += "],\"address\":1}";
+  } else {
+    int csq = sim_readCSQ();
+    int dbm = (csq >= 0 && csq <= 31) ? (-113 + 2 * csq) : -113;
+    url = "https://www.googleapis.com/geolocation/v1/geolocate?key=";
+    url += cfg.netlocApiKey;
+    body = "{\"radioType\":\"";
+    body += radio;
+    body += "\",\"considerIp\":true,\"cellTowers\":[{\"mobileCountryCode\":";
+    body += String(mcc);
+    body += ",\"mobileNetworkCode\":";
+    body += String(mnc);
+    body += ",\"locationAreaCode\":";
+    body += String(lac);
+    body += ",\"cellId\":";
+    body += String(cellId);
+    body += ",\"signalStrength\":";
+    body += String(dbm);
+    body += "}],\"wifiAccessPoints\":[";
+    body += googleWiFiJson;
+    body += "]}";
+  }
+
+  logPrintf("[NETLOC] Hybrid geoloc via SIM: wifiAPs=%d radio=%s cell=%d/%d/%d/%d",
+            wifiCount, radio.c_str(), mcc, mnc, lac, cellId);
+
+  String response;
+  if (!SIM7680C_httpPostWithResponse(url, "application/json", body, response)) {
+    logLine("[NETLOC] Hybrid geoloc request failed");
+    return false;
+  }
+
+  double lat = 0.0;
+  double lng = 0.0;
+  float accuracy = 9999.0f;
+  if (!parseLocationApiResponse(response, &lat, &lng, &accuracy)) {
+    logPrintf("[NETLOC] Hybrid response parse failed: %s", response.c_str());
+    return false;
+  }
+
+  logPrintf("[NETLOC] Hybrid geoloc: lat=%.6f lng=%.6f acc=%.0fm",
+            lat, lng, accuracy);
+  telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
   return true;
 }
 
@@ -396,11 +513,13 @@ bool acquireNetworkLocationNow() {
     return false;
   }
 
-  bool success = doCellGeolocationCLBS();
-  if (!success && WiFi.status() == WL_CONNECTED)
-    success = doWiFiGeolocation();
+  bool success = doHybridGeolocationViaSIMApi();
+  if (!success)
+    success = doCellGeolocationCLBS();
   if (!success)
     success = doCellGeolocationViaSIMApi();
+  if (!success && WiFi.status() == WL_CONNECTED)
+    success = doWiFiGeolocation();
   return success;
 }
 
@@ -444,6 +563,25 @@ void networkLocationTask(void *pvParameters) {
 
     if (success) {
       logLine("[NETLOC] Network location obtained");
+
+      TelemetrySnapshot postTelem = {};
+      getTelemetrySnapshot(&postTelem);
+      if (!postTelem.gpsReady && postTelem.networkLocReady) {
+        uint32_t accM = (postTelem.networkLocAccuracyM > 100.0f)
+                            ? (uint32_t)postTelem.networkLocAccuracyM
+                            : 100U;
+        if (accM > 100000U)
+          accM = 100000U;
+        GPS_injectApproxPosition(postTelem.networkLocLat, postTelem.networkLocLng,
+                                 accM);
+
+        time_t now = time(nullptr);
+        if (now > 1704067200UL) {
+          struct tm *t = gmtime(&now);
+          GPS_injectApproxTime(t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+                               t->tm_hour, t->tm_min, t->tm_sec, 1000);
+        }
+      }
     } else {
       logLine("[NETLOC] All network location methods failed");
     }

@@ -1,5 +1,6 @@
 #include "WiFiManager.h"
 #include "server.h"
+#include <time.h>
 
 // ============================================================
 // WiFi event handler (informational only)
@@ -9,6 +10,8 @@ static void onWiFiEvent(WiFiEvent_t event) {
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     Serial.printf("[WIFI] STA connected, IP: %s\n",
                   WiFi.localIP().toString().c_str());
+    configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+    Serial.println("[WIFI] SNTP sync requested");
     break;
   case ARDUINO_EVENT_WIFI_AP_START:
     Serial.printf("[WIFI] AP started, SSID: %s  IP: %s\n",

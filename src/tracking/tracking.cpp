@@ -20,9 +20,11 @@ static constexpr unsigned long HISTORY_MOVING_INTERVAL_MS = 1800000UL;
 static constexpr unsigned long HISTORY_STATIONARY_INTERVAL_MS = 7200000UL;
 static constexpr unsigned long HISTORY_DISTANCE_MIN_GAP_MS = 900000UL;
 static constexpr double HISTORY_DISTANCE_DELTA_M = 1000.0;
+static constexpr unsigned long TRACK_SEND_RETRY_BACKOFF_MS = 15000UL;
 
 static unsigned long lastCurrentSendMS = 0;
 static unsigned long lastHistorySendMS = 0;
+static unsigned long lastFailedSendMs = 0;
 static double lastCurrentLat = 0.0;
 static double lastCurrentLng = 0.0;
 static double lastHistoryLat = 0.0;
@@ -285,7 +287,17 @@ void Tracking_Loop() {
   if (!loc.valid)
     return;
 
+  // Don't auto-track HOME fallback. It is only a rough placeholder and causes
+  // noisy retries before the device has obtained any live location.
+  if (loc.source == LOC_HOME)
+    return;
+
   const unsigned long nowMs = millis();
+  if (lastFailedSendMs > 0 &&
+      (nowMs - lastFailedSendMs) < TRACK_SEND_RETRY_BACKOFF_MS) {
+    return;
+  }
+
   const float speedKmph = readCurrentSpeedKmph();
   const bool sendCurrent = shouldSendCurrentSnapshot(loc, speedKmph, nowMs);
   const bool writeHistory = shouldWriteHistorySample(loc, speedKmph, nowMs);
@@ -301,9 +313,12 @@ void Tracking_Loop() {
     wifiOK = sendViaSIM(json);
 
   if (wifiOK) {
+    lastFailedSendMs = 0;
     rememberCurrentSnapshot(loc, nowMs);
     if (writeHistory)
       rememberHistorySnapshot(loc, nowMs);
+  } else {
+    lastFailedSendMs = nowMs;
   }
 }
 

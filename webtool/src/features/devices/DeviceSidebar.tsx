@@ -20,11 +20,19 @@ export function DeviceSidebar({
   onSelect,
 }: DeviceSidebarProps) {
   if (loading) {
-    return <div className="panel muted">{copy.loadingDevices}</div>;
+    return (
+      <div className="panel muted" style={{ minHeight: 72 }}>
+        {copy.loadingDevices}
+      </div>
+    );
   }
 
   if (!devices.length) {
-    return <div className="panel muted">{copy.noDevices}</div>;
+    return (
+      <div className="panel muted" style={{ minHeight: 72 }}>
+        {copy.noDevices}
+      </div>
+    );
   }
 
   return (
@@ -37,9 +45,9 @@ export function DeviceSidebar({
           type="button"
         >
           <div className="device-card__top">
-            <div>
+            <div style={{ minWidth: 0 }}>
               <h3>{device.deviceName}</h3>
-              <p>{device.deviceId}</p>
+              <p className="device-card__id">{device.deviceId}</p>
             </div>
             <span className={device.online ? "status-dot is-online" : "status-dot is-offline"}>
               {device.online ? copy.online : copy.offline}

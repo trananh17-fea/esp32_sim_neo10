@@ -107,3 +107,31 @@ export async function renameDevice(deviceId: string, deviceName: string) {
   });
   return response.deviceName;
 }
+
+type HomeResponse = {
+  ok: boolean;
+  deviceId: string;
+  homeSet: boolean;
+  homeLat: number | null;
+  homeLng: number | null;
+  distanceToHomeM: number;
+};
+
+export async function setDeviceHome(
+  deviceId: string,
+  homeLat: number,
+  homeLng: number,
+  geoRadiusM?: number,
+): Promise<HomeResponse> {
+  return requestJson<HomeResponse>("/api/device/home", {
+    method: "POST",
+    body: JSON.stringify({ deviceId, homeLat, homeLng, geoRadiusM }),
+  });
+}
+
+export async function clearDeviceHome(deviceId: string): Promise<HomeResponse> {
+  return requestJson<HomeResponse>("/api/device/home", {
+    method: "POST",
+    body: JSON.stringify({ deviceId, clear: true }),
+  });
+}

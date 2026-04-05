@@ -21,25 +21,28 @@ export function HistoryTimeline({
     <section className="panel history-panel">
       <div className="panel__header">
         <div>
-          <p className="eyebrow">{copy.movementHistory}</p>
-          <h3>{selectedDeviceName ?? copy.noDeviceSelected}</h3>
+          <p className="panel__eyebrow">{copy.movementHistory}</p>
+          <h3 className="panel__title">{selectedDeviceName ?? copy.noDeviceSelected}</h3>
         </div>
         <span className="history-count">
           {points.length} {copy.pointsLabel}
         </span>
       </div>
 
-      {loading ? <p className="muted">{copy.loadingHistory}</p> : null}
-      {!loading && !points.length ? (
+      {loading && <p className="muted">{copy.loadingHistory}</p>}
+      {!loading && !points.length && (
         <p className="muted">{copy.noHistory}</p>
-      ) : null}
+      )}
 
       <div className="history-list">
         {points
           .slice()
           .reverse()
           .map((point) => (
-            <div className="history-item" key={`${point.deviceId}-${point.timestamp}`}>
+            <div
+              className="history-item"
+              key={`${point.deviceId}-${point.timestamp}`}
+            >
               <div className="history-item__dot" />
               <div>
                 <strong>{formatTimestamp(point.timestamp, locale)}</strong>

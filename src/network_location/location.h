@@ -2,14 +2,16 @@
 #include "Config.h"
 
 // ============================================================
-// Network location: cell-first geolocation with optional WiFi fallback
+// Network location: hybrid geolocation using cell + nearby WiFi
 //
 // Provides coarse location when GPS is unavailable.
 // Tuned for deployments where WiFi is rare or unreliable.
 //
 // Attempt order:
-//   1. Cell geolocation via AT+CLBS
-//   2. WiFi geolocation API, only when WiFi is actually usable
+//   1. Hybrid geolocation via SIM internet (cell + scanned WiFi BSSIDs)
+//   2. Cell geolocation via AT+CLBS
+//   3. Cell-only geolocation via SIM internet
+//   4. WiFi geolocation API when STA is connected
 //
 // Task behavior:
 //   - Wait 8s after boot
