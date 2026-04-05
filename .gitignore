@@ -8,3 +8,4 @@
 /webtool/node_modules
 /webtool/dist
 /.tools
+.vscode/c_cpp_properties.json
