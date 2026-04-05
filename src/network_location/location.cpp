@@ -4,6 +4,9 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
+static constexpr unsigned long NETLOC_RECHECK_WHEN_GPS_FRESH_MS = 300000UL;
+static constexpr unsigned long NETLOC_REFRESH_NO_GPS_MS = 1800000UL;
+
 // ============================================================
 // WiFi Geolocation — scan nearby APs, send to API
 // ============================================================
@@ -264,7 +267,7 @@ static bool doCellGeolocationCLBS() {
 //   3) If SOS is active, skip
 //   4) Try cell geolocation first (AT+CLBS)
 //   5) If cell fails and WiFi is usable, try WiFi geolocation
-//   6) Refresh every 5 min while GPS is still down
+//   6) Refresh every 30 min while GPS is still down
 // ============================================================
 void networkLocationTask(void *pvParameters) {
   // Initial delay — give GPS and SIM time to attempt fix
@@ -295,7 +298,7 @@ void networkLocationTask(void *pvParameters) {
       unsigned long gpsAge = millis() - telem.lastGpsUpdateMs;
       if (gpsAge < 60000) { // < 1 minute
         logLine("[NETLOC] GPS active, skip network location");
-        vTaskDelay(pdMS_TO_TICKS(60000)); // check again in 1 min
+        vTaskDelay(pdMS_TO_TICKS(NETLOC_RECHECK_WHEN_GPS_FRESH_MS));
         continue;
       }
     }
@@ -320,8 +323,6 @@ void networkLocationTask(void *pvParameters) {
       logLine("[NETLOC] All network location methods failed");
     }
 
-    // Refresh interval: 5 min if no GPS, 1 min if GPS is available
-    unsigned long refreshMs = telem.gpsReady ? 60000 : 300000;
-    vTaskDelay(pdMS_TO_TICKS(refreshMs));
+    vTaskDelay(pdMS_TO_TICKS(NETLOC_REFRESH_NO_GPS_MS));
   }
 }

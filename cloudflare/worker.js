@@ -4,6 +4,7 @@ const MAX_HISTORY_LIMIT = 500;
 const TRACKER_PREFIX = "TRACKER:";
 const DEVICE_META_PREFIX = "DEVICE_META:";
 const HISTORY_PREFIX = "HISTORY:";
+const DEVICE_INDEX_KEY = "DEVICE_INDEX";
 
 function normalizeNumber(value) {
     if (typeof value === "number") {
@@ -115,6 +116,37 @@ async function getDeviceMeta(env, deviceId) {
     }
 }
 
+async function getDeviceIndex(env) {
+    const raw = await env.TRACKER_KV.get(DEVICE_INDEX_KEY);
+    if (!raw) return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+
+        const ids = [];
+        for (const item of parsed) {
+            const deviceId = normalizeDeviceId(item);
+            if (deviceId && !ids.includes(deviceId)) ids.push(deviceId);
+        }
+        return ids;
+    } catch {
+        return [];
+    }
+}
+
+async function saveDeviceIndex(env, deviceIds) {
+    await env.TRACKER_KV.put(DEVICE_INDEX_KEY, JSON.stringify(deviceIds));
+}
+
+async function ensureDeviceIndexed(env, deviceId) {
+    const currentIndex = await getDeviceIndex(env);
+    if (currentIndex.includes(deviceId)) return;
+
+    currentIndex.push(deviceId);
+    await saveDeviceIndex(env, currentIndex);
+}
+
 function normalizeSnapshot(deviceId, payload) {
     const lat = normalizeNumber(payload.lat);
     const lng = normalizeNumber(payload.lng);
@@ -216,10 +248,12 @@ async function getResolvedSnapshot(env, deviceId) {
 }
 
 async function listKnownDeviceIds(env) {
-    const [metaKeys, trackerKeys, historyKeys] = await Promise.all([
+    const indexedIds = await getDeviceIndex(env);
+    if (indexedIds.length) return indexedIds;
+
+    const [metaKeys, trackerKeys] = await Promise.all([
         listAllKeys(env.TRACKER_KV, DEVICE_META_PREFIX),
         listAllKeys(env.TRACKER_KV, TRACKER_PREFIX),
-        listAllKeys(env.TRACKER_KV, HISTORY_PREFIX),
     ]);
 
     const ids = new Set();
@@ -234,12 +268,12 @@ async function listKnownDeviceIds(env) {
         if (deviceId) ids.add(deviceId);
     }
 
-    for (const key of historyKeys) {
-        const deviceId = extractDeviceIdFromHistoryKey(key);
-        if (deviceId) ids.add(deviceId);
+    const resolvedIds = Array.from(ids);
+    if (resolvedIds.length) {
+        await saveDeviceIndex(env, resolvedIds);
     }
 
-    return Array.from(ids);
+    return resolvedIds;
 }
 
 async function getHistoryPoints(env, deviceId, from, to, limit) {
@@ -299,6 +333,7 @@ export default {
                 }
 
                 const existingMeta = await getDeviceMeta(env, deviceId);
+                const historySample = normalizeBoolean(data.historySample, false);
                 const snapshot = normalizeSnapshot(deviceId, {
                     ...data,
                     lat,
@@ -313,14 +348,48 @@ export default {
                     lastSeenAt: snapshot.timestamp,
                 };
 
-                await Promise.all([
+                const writes = [
                     env.TRACKER_KV.put(`${TRACKER_PREFIX}${deviceId}`, JSON.stringify(snapshot)),
-                    env.TRACKER_KV.put(`${DEVICE_META_PREFIX}${deviceId}`, JSON.stringify(meta)),
-                    env.TRACKER_KV.put(historyKey(deviceId, snapshot.timestamp), JSON.stringify(snapshot)),
-                ]);
+                ];
+
+                if (!existingMeta) {
+                    writes.push(
+                        env.TRACKER_KV.put(
+                            `${DEVICE_META_PREFIX}${deviceId}`,
+                            JSON.stringify(meta)
+                        )
+                    );
+                    writes.push(ensureDeviceIndexed(env, deviceId));
+                } else if (
+                    !existingMeta.preferredName &&
+                    existingMeta.deviceName !== snapshot.deviceName
+                ) {
+                    writes.push(
+                        env.TRACKER_KV.put(
+                            `${DEVICE_META_PREFIX}${deviceId}`,
+                            JSON.stringify(meta)
+                        )
+                    );
+                }
+
+                if (historySample) {
+                    writes.push(
+                        env.TRACKER_KV.put(
+                            historyKey(deviceId, snapshot.timestamp),
+                            JSON.stringify(snapshot)
+                        )
+                    );
+                }
+
+                await Promise.all(writes);
 
                 return jsonResponse(
-                    { ok: true, deviceId, timestamp: snapshot.timestamp },
+                    {
+                        ok: true,
+                        deviceId,
+                        historySample,
+                        timestamp: snapshot.timestamp,
+                    },
                     corsHeaders
                 );
             } catch (error) {
@@ -354,7 +423,10 @@ export default {
                     lastSeenAt: current?.timestamp ?? Date.now(),
                 };
 
-                await env.TRACKER_KV.put(`${DEVICE_META_PREFIX}${deviceId}`, JSON.stringify(meta));
+                await Promise.all([
+                    env.TRACKER_KV.put(`${DEVICE_META_PREFIX}${deviceId}`, JSON.stringify(meta)),
+                    ensureDeviceIndexed(env, deviceId),
+                ]);
 
                 if (current) {
                     const updatedCurrent = {
@@ -385,10 +457,10 @@ export default {
                 deviceIds.map(async (deviceId) => {
                     const [meta, current] = await Promise.all([
                         getDeviceMeta(env, deviceId),
-                        getResolvedSnapshot(env, deviceId),
+                        getCurrentSnapshot(env, deviceId),
                     ]);
 
-                    if (!meta && !current) return null;
+                    if (!current) return null;
 
                     const resolvedName =
                         meta?.preferredName ??
@@ -400,7 +472,7 @@ export default {
                         ...(current ?? {}),
                         deviceId,
                         deviceName: resolvedName,
-                        lastSeenAt: meta?.lastSeenAt ?? current?.timestamp ?? 0,
+                        lastSeenAt: current?.timestamp ?? meta?.lastSeenAt ?? 0,
                     };
                 })
             );

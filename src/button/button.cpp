@@ -5,12 +5,8 @@
 #include "buzzer/buzzer.h"
 
 static TaskHandle_t sSosTaskHandle = NULL;
+static TaskHandle_t sBuzzerTaskHandle = NULL;
 
-// ============================================================
-// SOS Emergency Task
-// 1) Send SMS to all configured numbers (CALL_1/2/3 + HOTLINE)
-// 2) Call cascade: CALL_1 → CALL_2 → CALL_3 → HOTLINE
-// ============================================================
 static void sosTask(void *pvParameters) {
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
@@ -19,12 +15,10 @@ static void sosTask(void *pvParameters) {
   telemetrySetSosCancelRequested(false);
   logLine("[SOS] === EMERGENCY TRIGGERED ===");
 
-  // 1) Build SMS with GPS link
   String link = getGPSLink();
   String msg = String(cfg.smsTemplate) + " - Link: " + link +
                "\nWeb: https://thanhvu220809.github.io/gps-dashboard/";
 
-  // 2) Send SMS to all numbers
   const char *nums[] = {cfg.call1, cfg.call2, cfg.call3, cfg.hotline};
   for (int i = 0; i < 4; i++) {
     if (telemetryIsSosCancellationRequested()) {
@@ -37,7 +31,6 @@ static void sosTask(void *pvParameters) {
     }
   }
 
-  // 3) Call cascade
   if (!telemetryIsSosCancellationRequested()) {
     logLine("[SOS] Starting call cascade...");
     SIM7680C_callCascade();
@@ -69,91 +62,97 @@ static void startSosTask(bool enableBuzzer) {
     return;
   }
 
-  if (enableBuzzer && !buzzerActive) {
+  if (enableBuzzer && !buzzerActive && sBuzzerTaskHandle == NULL) {
     buzzerActive = true;
     xTaskCreatePinnedToCore(
         [](void *) {
           buzzer_sos();
+          sBuzzerTaskHandle = NULL;
           vTaskDelete(NULL);
         },
-        "buzzerSOS", 4096, NULL, 1, NULL, 0);
+        "buzzerSOS", 4096, NULL, 1, &sBuzzerTaskHandle, 0);
   }
 }
 
-// ============================================================
-// Button Task — double-click / long press detection
-// ============================================================
+static void cancelSosAndStopBuzzer() {
+  bool handled = false;
+
+  if (telemetryIsSosActive()) {
+    telemetrySetSosCancelRequested(true);
+    logLine("[Button] Hold >3s -> CANCEL SOS");
+    handled = true;
+  }
+
+  if (buzzerActive) {
+    buzzerActive = false;
+    logLine("[Button] Hold >3s -> STOP BUZZER");
+    handled = true;
+  }
+
+  if (!handled) {
+    logLine("[Button] Hold >3s -> system already normal");
+  }
+}
+
 void buttonTask(void *pvParameters) {
   logLine("[Button] Task started");
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  bool lastState = HIGH;
+  bool lastRawState = HIGH;
+  bool stableState = HIGH;
+  unsigned long lastDebounceTime = 0;
   unsigned long pressedTime = 0;
-  int clickCount = 0;
   unsigned long lastClickTime = 0;
-  const unsigned long doubleClickGap = 400;
+  int clickCount = 0;
+
+  const unsigned long debounceMs = 40;
+  const unsigned long minShortPressMs = 60;
+  const unsigned long shortPressMaxMs = 400;
+  const unsigned long doubleClickGapMs = 400;
 
   while (true) {
-    bool state = digitalRead(BUTTON_PIN);
+    bool rawState = digitalRead(BUTTON_PIN);
 
-    // Press down
-    if (state == LOW && lastState == HIGH) {
-      pressedTime = millis();
+    if (rawState != lastRawState) {
+      lastDebounceTime = millis();
+      lastRawState = rawState;
     }
 
-    // Release
-    if (state == HIGH && lastState == LOW) {
-      unsigned long dur = millis() - pressedTime;
+    if ((millis() - lastDebounceTime) >= debounceMs && rawState != stableState) {
+      stableState = rawState;
 
-      // =====================================
-      // CASE 1: Short click (<400ms) — double-click detection
-      // =====================================
-      if (dur < 400) {
-        clickCount++;
-        if (clickCount == 1) {
-          lastClickTime = millis();
-        } else if (clickCount == 2 &&
-                   (millis() - lastClickTime) < doubleClickGap) {
-          logLine("[Button] Double Click -> SMS + CALL (no buzzer)");
-          startSosTask(false);
+      if (stableState == LOW) {
+        pressedTime = millis();
+      } else {
+        const unsigned long pressDurationMs = millis() - pressedTime;
+
+        if (pressDurationMs >= minShortPressMs &&
+            pressDurationMs < shortPressMaxMs) {
+          clickCount++;
+          if (clickCount == 1) {
+            lastClickTime = millis();
+          } else if (clickCount == 2 &&
+                     (millis() - lastClickTime) < doubleClickGapMs) {
+            logLine("[Button] Double Click -> SOS silent (SMS + CALL)");
+            startSosTask(false);
+            clickCount = 0;
+          }
+        } else if (pressDurationMs >= 1000 && pressDurationMs <= 3000) {
+          logLine("[Button] Hold 1-3s -> SOS + BUZZER");
+          startSosTask(true);
+          clickCount = 0;
+        } else if (pressDurationMs > 3000) {
+          cancelSosAndStopBuzzer();
           clickCount = 0;
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
-      }
-
-      // =====================================
-      // CASE 2: Hold 1-3s → SMS + CALL + BUZZER SOS
-      // =====================================
-      else if (dur >= 1000 && dur <= 3000) {
-        logLine("[Button] Hold 1-3s -> SOS + BUZZER");
-        startSosTask(true);
-        clickCount = 0;
-      }
-
-      // =====================================
-      // CASE 3: Hold >3s → STOP SOS buzzer
-      // =====================================
-      else if (dur > 3000) {
-        if (telemetryIsSosActive()) {
-          telemetrySetSosCancelRequested(true);
-          logLine("[Button] Hold >3s -> CANCEL SOS");
-        }
-        if (buzzerActive) {
-          logLine("[Button] Hold >3s -> STOP BUZZER");
-          buzzerActive = false;
-        } else if (!telemetryIsSosActive()) {
-          logLine("[Button] Hold >3s, buzzer already off");
-        }
-        clickCount = 0;
       }
     }
 
-    // Reset click counter on timeout
-    if (clickCount > 0 && (millis() - lastClickTime > doubleClickGap)) {
+    if (clickCount > 0 && stableState == HIGH &&
+        (millis() - lastClickTime) > doubleClickGapMs) {
       clickCount = 0;
     }
 
-    lastState = state;
     vTaskDelay(pdMS_TO_TICKS(20));
   }
 }

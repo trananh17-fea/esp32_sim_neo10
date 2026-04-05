@@ -20,7 +20,7 @@ import type {
   TrackerHistoryPoint,
 } from "../types/tracker";
 
-const REFRESH_INTERVAL_MS = 15000;
+const REFRESH_INTERVAL_MS = 60000;
 
 const rangeOptions: HistoryRange[] = ["30m", "6h", "24h", "7d"];
 const STORAGE_KEYS = {

@@ -119,7 +119,7 @@ curl http://192.168.4.1/config
 1. Double-click the button (2 presses within 400ms)
 2. **EXPECT** in serial:
    ```
-   [Button] Double Click -> SMS + CALL (no buzzer)
+   [Button] Double Click -> SOS silent (SMS + CALL)
    [SOS] === EMERGENCY TRIGGERED ===
    [SOS] SMS #1 -> +84...
    [SOS] SMS #2 -> +84...
@@ -153,7 +153,14 @@ curl http://192.168.4.1/config
 ### 4.4 Long Press SOS (With Buzzer)
 1. Hold button 1-3 seconds
 2. **EXPECT**: Buzzer starts SOS pattern + SMS + calls
-3. Hold button >3 seconds → buzzer stops
+3. Hold button >3 seconds
+4. **EXPECT** in serial:
+   ```
+   [Button] Hold >3s -> CANCEL SOS
+   [Button] Hold >3s -> STOP BUZZER
+   [SOS] === EMERGENCY CANCELLED ===
+   ```
+5. System returns to normal state
 
 ### 4.5 Concurrency Protection
 1. Trigger SOS while tracking is running

@@ -15,7 +15,7 @@
 //   - Wait 8s after boot
 //   - Skip while GPS is fresh
 //   - Skip while SOS is active
-//   - Refresh every 5 minutes if GPS is still unavailable
+//   - Refresh every 30 minutes if GPS is still unavailable
 //
 // Requires:
 //   - NETLOC_API_KEY for WiFi geolocation API
