@@ -71,6 +71,7 @@ const OSRM_BASE = "https://router.project-osrm.org";
 const MAX_ROUTE_CONCURRENCY = 2;
 const MAX_ROUTE_POINTS = 120;
 const roadRouteCache = new Map<string, CachedRoute>();
+const BOOTSTRAP_EPSILON = 0.00005;
 
 function isValidPair(lat?: number | null, lng?: number | null): lat is number {
   return (
@@ -79,6 +80,20 @@ function isValidPair(lat?: number | null, lng?: number | null): lat is number {
     Number.isFinite(lat) &&
     Number.isFinite(lng)
   );
+}
+
+function isBootstrapHistoryPoint(point: TrackerHistoryPoint): boolean {
+  const source = (point.locSource || "").trim().toLowerCase();
+  const looksLikeBootstrapCoord =
+    Math.abs(point.lat - DEFAULT_CENTER[0]) <= BOOTSTRAP_EPSILON &&
+    Math.abs(point.lng - DEFAULT_CENTER[1]) <= BOOTSTRAP_EPSILON;
+  const isSyntheticSource =
+    !source ||
+    source === "home" ||
+    source === "none" ||
+    source === "unknown";
+
+  return looksLikeBootstrapCoord && isSyntheticSource;
 }
 
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -229,7 +244,10 @@ export function TrackerMap({
     [devices]
   );
   const visibleHistory = useMemo(
-    () => history.filter((p) => isValidPair(p.lat, p.lng)),
+    () =>
+      history.filter(
+        (p) => isValidPair(p.lat, p.lng) && !isBootstrapHistoryPoint(p)
+      ),
     [history]
   );
   const selectedDevice =

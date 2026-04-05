@@ -18,6 +18,10 @@ type EnrichedPoint = TrackerHistoryPoint & {
   summaryLabel: string;
 };
 
+const BOOTSTRAP_HOME_LAT = 10.901146;
+const BOOTSTRAP_HOME_LNG = 106.806184;
+const BOOTSTRAP_EPSILON = 0.00005;
+
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -36,11 +40,11 @@ function formatDistance(m: number, locale: Locale): string {
 }
 
 function formatDuration(seconds: number, locale: Locale): string {
-  if (seconds <= 0) return locale === "vi" ? "vua xong" : "just now";
-  if (seconds < 60) return locale === "vi" ? `${seconds} giay` : `${seconds}s`;
-  if (seconds < 3600) return locale === "vi" ? `${Math.round(seconds / 60)} phut` : `${Math.round(seconds / 60)}m`;
+  if (seconds <= 0) return locale === "vi" ? "vừa xong" : "just now";
+  if (seconds < 60) return locale === "vi" ? `${seconds} giây` : `${seconds}s`;
+  if (seconds < 3600) return locale === "vi" ? `${Math.round(seconds / 60)} phút` : `${Math.round(seconds / 60)}m`;
   return locale === "vi"
-    ? `${(seconds / 3600).toFixed(1)} gio`
+    ? `${(seconds / 3600).toFixed(1)} giờ`
     : `${(seconds / 3600).toFixed(1)}h`;
 }
 
@@ -55,9 +59,24 @@ function formatSource(locSource: string | undefined, copy: AppCopy): string {
   return normalized.toUpperCase();
 }
 
+function isBootstrapHistoryPoint(point: TrackerHistoryPoint): boolean {
+  const source = (point.locSource || "").trim().toLowerCase();
+  const looksLikeBootstrapCoord =
+    Math.abs(point.lat - BOOTSTRAP_HOME_LAT) <= BOOTSTRAP_EPSILON &&
+    Math.abs(point.lng - BOOTSTRAP_HOME_LNG) <= BOOTSTRAP_EPSILON;
+  const isSyntheticSource =
+    !source ||
+    source === "home" ||
+    source === "none" ||
+    source === "unknown";
+
+  return looksLikeBootstrapCoord && isSyntheticSource;
+}
+
 function enrichPoints(points: TrackerHistoryPoint[], locale: Locale): EnrichedPoint[] {
   const chronological = points
     .slice()
+    .filter((point) => !isBootstrapHistoryPoint(point))
     .sort((a, b) => a.timestamp - b.timestamp);
 
   return chronological.map((point, index) => {
