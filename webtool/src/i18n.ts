@@ -156,7 +156,7 @@ export const translations: Record<Locale, AppCopy> = {
     liveMap: "Bản đồ trực tiếp",
     liveMapTitle: "Vị trí hiện tại và lịch sử",
     liveMapDescription:
-      "Dữ liệu được lấy từ Cloudflare Worker API. Thiết bị đang chọn sẽ hiển thị thêm đường đi trong khoảng thời gian đã chọn.",
+      "Dữ liệu được lấy từ dữ liệu trực tiếp. Thiết bị đang chọn sẽ hiển thị thêm đường đi trong khoảng thời gian đã chọn.",
     languageLabel: "Ngôn ngữ",
     themeLabel: "Giao diện",
     englishLabel: "Tiếng Anh",
