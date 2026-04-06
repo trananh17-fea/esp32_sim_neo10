@@ -1,6 +1,6 @@
 #ifdef DEV
-#define SSID_Name "Thanh Vu"
-#define SSID_Password "thanhvu@wifi"
+#define SSID_Name "Con Gà"
+#define SSID_Password "123456788"
 
 #define QUOTE "\""
 #define COMMA ","

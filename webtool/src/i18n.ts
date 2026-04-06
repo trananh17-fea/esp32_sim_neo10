@@ -25,6 +25,8 @@ export type AppCopy = {
   renamePlaceholder: string;
   save: string;
   saving: string;
+  fetchCurrentLocation: string;
+  fetchingLocation: string;
   onlineNow: string;
   latitude: string;
   longitude: string;
@@ -99,6 +101,8 @@ export const translations: Record<Locale, AppCopy> = {
     renamePlaceholder: "Rename this tracker",
     save: "Save",
     saving: "Saving...",
+    fetchCurrentLocation: "Get current location",
+    fetchingLocation: "Getting location...",
     onlineNow: "online now",
     latitude: "Latitude",
     longitude: "Longitude",
@@ -175,6 +179,8 @@ export const translations: Record<Locale, AppCopy> = {
     renamePlaceholder: "Đổi tên thiết bị này",
     save: "Lưu",
     saving: "Đang lưu...",
+    fetchCurrentLocation: "Lấy tọa độ hiện tại",
+    fetchingLocation: "Đang lấy tọa độ...",
     onlineNow: "đang online",
     latitude: "Vĩ độ",
     longitude: "Kinh độ",

@@ -1,4 +1,7 @@
 #include "Config.h"
+#include <TinyGPSPlus.h>
+
+extern TinyGPSPlus gps;
 
 nvs_handle_t nvsHandle;
 SemaphoreHandle_t serialMutex = NULL;
@@ -41,6 +44,9 @@ char NETLOC_API_KEY[CONFIG_NETLOC_KEY_LEN] =
 char NETLOC_PROVIDER[32] =
     "unwiredlabs"; // Hoặc đổi thành "unwiredlabs" nếu dùng Unwired Labs
 
+char NETLOC_RELAY_URL[CONFIG_NETLOC_RELAY_LEN] =
+    "https://gps-tracker.ahcntab.workers.dev/api/geolocate";
+
 volatile uint8_t SIM_CAPABILITY_LEVEL = 0;
 volatile bool SOS_ACTIVE = false;
 volatile bool SOS_CANCEL_REQUESTED = false;
@@ -63,6 +69,12 @@ static volatile double NETLOC_LNG = 0.0;
 static volatile float NETLOC_ACC = 0.0f;
 static volatile unsigned long NETLOC_AT_MS = 0;
 static volatile LocationSource NETLOC_SOURCE = LOC_NONE;
+static volatile bool FUSED_READY = false;
+static volatile double FUSED_LAT = 0.0;
+static volatile double FUSED_LNG = 0.0;
+static volatile float FUSED_ACC = 99999.0f;
+static volatile unsigned long FUSED_AT_MS = 0;
+static volatile LocationSource FUSED_SOURCE = LOC_NONE;
 
 char PHONE[37] = "";
 char SMS[256] = "";
@@ -95,6 +107,76 @@ static bool isValidCoordPair(double lat, double lng) {
   if (lat == 0.0 && lng == 0.0)
     return false;
   return true;
+}
+
+static float estimateGpsAccuracyM() {
+  float hdop = gps.hdop.isValid() ? gps.hdop.hdop() : 99.9f;
+  int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
+
+  float acc = hdop * 5.0f;
+  if (sats < 4)
+    acc *= 2.5f;
+  else if (sats < 6)
+    acc *= 1.5f;
+
+  if (acc < 5.0f)
+    acc = 5.0f;
+  if (acc > 80.0f)
+    acc = 80.0f;
+  return acc;
+}
+
+static double distanceMeters(double latA, double lngA, double latB, double lngB) {
+  if (!isValidCoordPair(latA, lngA) || !isValidCoordPair(latB, lngB))
+    return -1.0;
+  const double R = 6371000.0;
+  const double toRad = PI / 180.0;
+  const double dLat = (latB - latA) * toRad;
+  const double dLng = (lngB - lngA) * toRad;
+  const double a = sin(dLat / 2.0) * sin(dLat / 2.0) +
+                   cos(latA * toRad) * cos(latB * toRad) *
+                       sin(dLng / 2.0) * sin(dLng / 2.0);
+  return R * 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+}
+
+static bool isTrustedNetworkCandidate(LocationSource source, float accuracyM) {
+  if (source == LOC_WIFI_GEO)
+    return accuracyM > 0.0f && accuracyM <= 1500.0f;
+  if (source == LOC_CELL_GEO)
+    return accuracyM > 0.0f && accuracyM <= 1200.0f;
+  return false;
+}
+
+static bool passesJumpGate(double lat, double lng, float accuracyM,
+                           LocationSource source, unsigned long nowMs) {
+  if (!FUSED_READY || !isValidCoordPair(FUSED_LAT, FUSED_LNG))
+    return true;
+
+  const unsigned long ageMs = nowMs - FUSED_AT_MS;
+  if (ageMs > 1800000UL)
+    return true;
+
+  const double jumpM = distanceMeters(lat, lng, FUSED_LAT, FUSED_LNG);
+  if (jumpM < 0.0)
+    return true;
+
+  if (source == LOC_GPS)
+    return true;
+
+  const double allowedM =
+      max(400.0, 2.5 * max<double>(accuracyM, static_cast<double>(FUSED_ACC)));
+  return jumpM <= allowedM;
+}
+
+static void rememberFusedLocation(const BestLocationResult &result, unsigned long nowMs) {
+  FUSED_READY = result.valid;
+  if (!result.valid)
+    return;
+  FUSED_LAT = result.lat;
+  FUSED_LNG = result.lng;
+  FUSED_ACC = result.accuracyM;
+  FUSED_AT_MS = nowMs;
+  FUSED_SOURCE = result.source;
 }
 
 static void syncLegacyUnlocked() {
@@ -150,6 +232,9 @@ void getConfigSnapshot(ConfigSnapshot *out) {
   strncpy(out->netlocProvider, NETLOC_PROVIDER,
           sizeof(out->netlocProvider) - 1);
   out->netlocProvider[sizeof(out->netlocProvider) - 1] = '\0';
+  strncpy(out->netlocRelayUrl, NETLOC_RELAY_URL,
+          sizeof(out->netlocRelayUrl) - 1);
+  out->netlocRelayUrl[sizeof(out->netlocRelayUrl) - 1] = '\0';
   unlockConfig();
 }
 
@@ -193,6 +278,9 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
   strncpy(NETLOC_PROVIDER, snapshot->netlocProvider,
           sizeof(NETLOC_PROVIDER) - 1);
   NETLOC_PROVIDER[sizeof(NETLOC_PROVIDER) - 1] = '\0';
+  strncpy(NETLOC_RELAY_URL, snapshot->netlocRelayUrl,
+          sizeof(NETLOC_RELAY_URL) - 1);
+  NETLOC_RELAY_URL[sizeof(NETLOC_RELAY_URL) - 1] = '\0';
   syncLegacyUnlocked();
   unlockConfig();
 }
@@ -364,7 +452,7 @@ const char *locationSourceName(LocationSource src) {
 // GPS fix must be current (age < 60s).
 // Network location must be reasonably fresh (age < 5 min).
 // ============================================================
-BestLocationResult getBestAvailableLocation() {
+static BestLocationResult getBestAvailableLocationLegacy() {
   BestLocationResult result = {};
   result.valid = false;
   result.source = LOC_NONE;
@@ -420,6 +508,99 @@ BestLocationResult getBestAvailableLocation() {
   }
 
   // 4) NONE — no location available
+  return result;
+}
+
+BestLocationResult getBestAvailableLocation() {
+  BestLocationResult result = {};
+  result.valid = false;
+  result.source = LOC_NONE;
+  result.accuracyM = 99999;
+  result.ageMs = 99999;
+
+  TelemetrySnapshot telem = {};
+  getTelemetrySnapshot(&telem);
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+  const unsigned long now = millis();
+
+  BestLocationResult gpsCandidate = {};
+  gpsCandidate.valid = false;
+  if (telem.gpsReady && isValidCoordPair(GPS_LAT, GPS_LNG)) {
+    gpsCandidate.lat = GPS_LAT;
+    gpsCandidate.lng = GPS_LNG;
+    gpsCandidate.accuracyM = estimateGpsAccuracyM();
+    gpsCandidate.source = LOC_GPS;
+    gpsCandidate.ageMs =
+        (telem.lastGpsUpdateMs > 0) ? (now - telem.lastGpsUpdateMs) : 0;
+    gpsCandidate.valid = gpsCandidate.ageMs < 60000UL;
+  }
+
+  BestLocationResult netCandidate = {};
+  netCandidate.valid = false;
+  if (telem.networkLocReady && telem.networkLocAtMs > 0 &&
+      isValidCoordPair(telem.networkLocLat, telem.networkLocLng)) {
+    netCandidate.lat = telem.networkLocLat;
+    netCandidate.lng = telem.networkLocLng;
+    netCandidate.accuracyM = telem.networkLocAccuracyM;
+    netCandidate.source = telem.networkLocSource;
+    netCandidate.ageMs = now - telem.networkLocAtMs;
+    netCandidate.valid =
+        netCandidate.ageMs < 300000UL &&
+        isTrustedNetworkCandidate(netCandidate.source, netCandidate.accuracyM) &&
+        passesJumpGate(netCandidate.lat, netCandidate.lng,
+                       netCandidate.accuracyM, netCandidate.source, now);
+  }
+
+  if (gpsCandidate.valid && netCandidate.valid) {
+    const double gapM = distanceMeters(gpsCandidate.lat, gpsCandidate.lng,
+                                       netCandidate.lat, netCandidate.lng);
+    const double allowedM =
+        max(50.0, gpsCandidate.accuracyM + (2.0 * netCandidate.accuracyM));
+    if (gapM >= 0.0 && gapM <= allowedM) {
+      const double wGps =
+          1.0 / max(25.0, static_cast<double>(gpsCandidate.accuracyM) *
+                              static_cast<double>(gpsCandidate.accuracyM));
+      const double wNet =
+          1.0 / max(100.0, static_cast<double>(netCandidate.accuracyM) *
+                               static_cast<double>(netCandidate.accuracyM));
+      const double wSum = wGps + wNet;
+      result.lat = (gpsCandidate.lat * wGps + netCandidate.lat * wNet) / wSum;
+      result.lng = (gpsCandidate.lng * wGps + netCandidate.lng * wNet) / wSum;
+      result.accuracyM = static_cast<float>(sqrt(1.0 / wSum));
+      result.source = LOC_GPS;
+      result.ageMs = min(gpsCandidate.ageMs, netCandidate.ageMs);
+      result.valid = true;
+      rememberFusedLocation(result, now);
+      return result;
+    }
+  }
+
+  if (gpsCandidate.valid) {
+    result = gpsCandidate;
+    rememberFusedLocation(result, now);
+    return result;
+  }
+
+  if (netCandidate.valid) {
+    result = netCandidate;
+    rememberFusedLocation(result, now);
+    return result;
+  }
+
+  const bool hasHome = isValidCoordPair(cfg.homeLat, cfg.homeLng);
+  if (hasHome) {
+    result.lat = cfg.homeLat;
+    result.lng = cfg.homeLng;
+    result.accuracyM = 5000.0f;
+    result.source = LOC_HOME;
+    result.ageMs = 0;
+    result.valid = true;
+    rememberFusedLocation(result, now);
+    return result;
+  }
+
+  rememberFusedLocation(result, now);
   return result;
 }
 

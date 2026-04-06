@@ -28,3 +28,4 @@
 
 bool acquireNetworkLocationNow();
 void networkLocationTask(void *pvParameters);
+String getLastWiFiScanDebugJson();

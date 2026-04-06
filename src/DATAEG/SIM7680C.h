@@ -47,6 +47,7 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
 // HTTP GET via SIM modem — downloads binary content and saves to LittleFS file.
 // Returns number of bytes downloaded, or 0 on failure.
 int SIM7680C_httpGetToFile(const String &url, const char *filePath);
+bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse);
 
 // --- Time ---
 // Read network time from SIM module (AT+CCLK?)

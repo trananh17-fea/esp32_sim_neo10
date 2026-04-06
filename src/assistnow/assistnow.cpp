@@ -8,7 +8,7 @@
 
 static const char *FILE_UBX = "/assistnow.ubx";
 static const char *FILE_TS = "/assistnow_ts.txt";
-static const unsigned long CACHE_MAX_AGE_S = 24UL * 3600UL;
+static const unsigned long CACHE_MAX_AGE_S = 7UL * 24UL * 3600UL;
 static bool fsReady = false;
 
 // ============================================================

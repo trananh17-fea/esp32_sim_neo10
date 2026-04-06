@@ -83,6 +83,8 @@ type HistoryResponse = {
   points: TrackerHistoryPoint[];
 };
 
+type LocationResponse = TrackerDeviceSummary;
+
 type RenameResponse = {
   deviceName: string;
 };
@@ -90,6 +92,12 @@ type RenameResponse = {
 export async function fetchDevices() {
   const response = await requestJson<DevicesResponse>("/api/devices");
   return response.devices;
+}
+
+export async function fetchDeviceLocation(deviceId: string) {
+  return requestJson<LocationResponse>(
+    `/api/location?deviceId=${encodeURIComponent(deviceId)}`
+  );
 }
 
 export async function fetchHistory(deviceId: string, range: HistoryRange) {

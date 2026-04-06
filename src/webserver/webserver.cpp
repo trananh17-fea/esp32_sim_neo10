@@ -4,6 +4,7 @@
 #include "GPS/gps.h"
 #include "Storage/Storage.h"
 #include "geofencing/geofencing.h"
+#include "network_location/location.h"
 #include "tracking/tracking.h"
 #include <AsyncTCP.h>
 #include <DNSServer.h>
@@ -94,6 +95,8 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
   <input id=p3 type=tel placeholder="(tuỳ chọn)">
   <label>Lời nhắn SMS</label>
   <textarea id=ms placeholder="Ví dụ: Tôi cần hỗ trợ khẩn cấp..."></textarea>
+  <label>Netloc Relay URL</label>
+  <input id=relay type=text placeholder="https://your-host/api/geolocate">
 
   <div class=card2>
     <div class=kv><span>HOME</span><b id=home>Chưa có</b></div>
@@ -123,10 +126,10 @@ function N(p){p=(p||'').trim();if(p.charAt(0)==='0'&&p.length>8)return'+84'+p.su
 function H(){var lat=($('hlat').value||'').trim(),lng=($('hlng').value||'').trim();return lat!==''&&lng!==''}
 function hb(locValid){$('bh').disabled=!(locValid||H())}
 function init(){fetch('/config').then(function(r){return r.json()}).then(function(c){
-  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
+  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('relay').value=c.nloc_url||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
 }).catch(function(){})}
 function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
-  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value);
+  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value)+'&nloc_url='+encodeURIComponent($('relay').value);
   fetch('/save_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d})
     .then(function(r){toast(r.ok?'Đã lưu cấu hình!':'Lỗi lưu cấu hình',r.ok)})
     .catch(function(){toast('Không thể lưu',false)})
@@ -137,9 +140,21 @@ function sh(){var b=$('bh');b.disabled=true;b.textContent='Đang lưu...';
   }).catch(function(){toast('Không thể lưu',false)})
     .finally(function(){b.disabled=false;b.textContent='Lưu HOME'})}
 function cl(v){return v>6?'g':v>3?'y':'r'}
+function srcLabel(src){
+  if(src==='gps') return 'GPS';
+  if(src==='wifi_geo') return 'WiFi geo';
+  if(src==='cell_geo') return 'Cell geo';
+  if(src==='home') return 'HOME';
+  return src||'Unknown';
+}
 function poll(){fetch('/status').then(function(r){return r.json()}).then(function(s){
-  var ls='NO FIX';if(s.loc_valid){ls=s.loc_src=='GPS'?('GPS • '+s.sats+' sats'):(s.loc_src+' • '+Math.round(s.loc_acc)+'m');}
-  $('sg').textContent='Vị trí: '+ls;$('sg').className='ch '+(s.loc_valid?(s.loc_src=='GPS'?'g':'y'):'r');
+  var ls='NO FIX';
+  if(s.loc_valid){
+    ls=srcLabel(s.loc_src);
+    if(s.loc_src==='gps') ls+=' • '+s.sats+' sats';
+    else ls+=' • ±'+Math.round(s.loc_acc)+'m';
+  }
+  $('sg').textContent='Vị trí: '+ls;$('sg').className='ch '+(s.loc_valid?(s.loc_src==='gps'?'g':'y'):'r');
   var dOk=(s.dist>=0);
   $('sd').textContent='Khoảng cách: '+(dOk?Math.round(s.dist)+'m':'--');$('sd').className='ch '+(dOk?'g':'');
   $('gf').textContent='Vùng: '+(s.geo_en?('ON • '+s.geo_rad+'m'):'OFF');$('gf').className='ch '+(s.geo_en?'y':'');
@@ -180,6 +195,9 @@ void initFriendlyNamePortal() {
                "\"sms\":\"" +
                jsonEsc(cfg.smsTemplate) +
                "\","
+               "\"nloc_url\":\"" +
+               jsonEsc(cfg.netlocRelayUrl) +
+               "\","
                "\"home\":" +
                String((cfg.homeLat != 0 || cfg.homeLng != 0) ? "true" : "false") +
                ",\"home_lat\":" + String(cfg.homeLat, 6) +
@@ -206,13 +224,17 @@ void initFriendlyNamePortal() {
     cfg.call3[sizeof(cfg.call3) - 1] = '\0';
     strncpy(cfg.smsTemplate, val("sms").c_str(), sizeof(cfg.smsTemplate) - 1);
     cfg.smsTemplate[sizeof(cfg.smsTemplate) - 1] = '\0';
+    strncpy(cfg.netlocRelayUrl, val("nloc_url").c_str(),
+            sizeof(cfg.netlocRelayUrl) - 1);
+    cfg.netlocRelayUrl[sizeof(cfg.netlocRelayUrl) - 1] = '\0';
     applyConfigSnapshot(&cfg);
 
-    // Save ONLY these 4 fields to NVS (nothing else disturbed)
+    // Save only edited fields to NVS
     nvs_set_str(nvsHandle, "CALL_1", cfg.call1);
     nvs_set_str(nvsHandle, "CALL_2", cfg.call2);
     nvs_set_str(nvsHandle, "CALL_3", cfg.call3);
     nvs_set_str(nvsHandle, "SMS_TPL", cfg.smsTemplate);
+    nvs_set_str(nvsHandle, "NLOC_URL", cfg.netlocRelayUrl);
     nvs_commit(nvsHandle);
 
     logPrintf("[PORTAL] Saved: C1=%s C2=%s C3=%s", cfg.call1, cfg.call2,
@@ -269,16 +291,17 @@ void initFriendlyNamePortal() {
     getTelemetrySnapshot(&telem);
 
     BestLocationResult loc = getBestAvailableLocation();
-    bool fix = telem.gpsReady;
+    bool locValid = loc.valid && (loc.lat != 0.0 || loc.lng != 0.0);
+    bool fix = telem.gpsReady && locValid && loc.source == LOC_GPS;
     int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
-    double lat = loc.valid ? loc.lat : 0.0;
-    double lng = loc.valid ? loc.lng : 0.0;
+    double lat = locValid ? loc.lat : 0.0;
+    double lng = locValid ? loc.lng : 0.0;
     bool hasHome = (cfg.homeLat != 0 || cfg.homeLng != 0);
     double dist = -1;
-    if (hasHome && loc.valid && (lat != 0 || lng != 0))
+    if (hasHome && locValid && (lat != 0 || lng != 0))
       dist = calculateDistance(lat, lng, cfg.homeLat, cfg.homeLng);
 
-    char buf[320];
+    char buf[384];
     snprintf(buf, sizeof(buf),
              "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
              "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
@@ -289,8 +312,10 @@ void initFriendlyNamePortal() {
              fix ? "true" : "false", sats, dist, telem.signal4G,
              telem.signalWiFi, hasHome ? "true" : "false",
              cfg.geofenceEnable ? "true" : "false", cfg.geofenceRadiusM,
-             loc.valid ? "true" : "false", locationSourceName(loc.source),
-             loc.accuracyM, loc.ageMs, lat, lng);
+             locValid ? "true" : "false",
+             locValid ? locationSourceName(loc.source) : "none",
+             locValid ? loc.accuracyM : 0.0f, locValid ? loc.ageMs : 0UL, lat,
+             lng);
     r->send(200, "application/json", buf);
   });
 
@@ -306,6 +331,10 @@ void initFriendlyNamePortal() {
     snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"ready\":%s}",
              telem.assistStatus, telem.assistReady ? "true" : "false");
     r->send(200, "application/json", buf);
+  });
+
+  server.on("/wifi_scan", HTTP_GET, [](AsyncWebServerRequest *r) {
+    r->send(200, "application/json", getLastWiFiScanDebugJson());
   });
 
   // --- Captive portal: redirect any URL to "/" ---

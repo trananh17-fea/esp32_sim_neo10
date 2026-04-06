@@ -37,14 +37,54 @@ const uint8_t CFG_GNSS_FAST[] = {
     0x01, 0x00, 0x01, 0x01, 0x01, 0x00, 0x10, 0x04, 0x00, 0x00, 0x01,
     0x01, 0x06, 0x00, 0x10, 0x04, 0x00, 0x00, 0x01, 0x01, 0x03, 0x00,
     0x10, 0x04, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00};
+const uint8_t CFG_RATE_1HZ[] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xE8,
+                                0x03, 0x01, 0x00, 0x01, 0x00, 0x01, 0x39};
 const uint8_t CFG_RATE_5HZ[] = {0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xC8,
                                 0x00, 0x01, 0x00, 0x01, 0x00, 0xDD, 0x68};
 const uint8_t CFG_RESET_HOT[] = {0xB5, 0x62, 0x06, 0x04, 0x04, 0x00,
                                  0x00, 0x00, 0x01, 0x00, 0x0F, 0x38};
 
+static bool gpsTrackingProfileApplied = false;
+static unsigned long gpsAcqStartMs = 0;
+static uint8_t gpsRecoveryStep = 0;
+
 static void sendUBX(const uint8_t *msg, uint16_t len) {
   for (int i = 0; i < len; i++)
     SerialGPS.write(msg[i]);
+}
+
+static void applyGpsAcquisitionProfile() {
+  sendUBX(CFG_NMEA_UART1, sizeof(CFG_NMEA_UART1));
+  vTaskDelay(pdMS_TO_TICKS(20));
+  sendUBX(CFG_UBX_PVT_OFF, sizeof(CFG_UBX_PVT_OFF));
+  vTaskDelay(pdMS_TO_TICKS(20));
+  sendUBX(CFG_NMEA_GGA_ON, sizeof(CFG_NMEA_GGA_ON));
+  sendUBX(CFG_NMEA_RMC_ON, sizeof(CFG_NMEA_RMC_ON));
+  vTaskDelay(pdMS_TO_TICKS(20));
+  sendUBX(CFG_GNSS_FAST, sizeof(CFG_GNSS_FAST));
+  vTaskDelay(pdMS_TO_TICKS(20));
+  sendUBX(CFG_RATE_1HZ, sizeof(CFG_RATE_1HZ));
+  vTaskDelay(pdMS_TO_TICKS(20));
+  logLine("[GPS] Acquisition profile applied (1Hz, fast search)");
+}
+
+static void applyGpsTrackingProfile() {
+  if (gpsTrackingProfileApplied)
+    return;
+  sendUBX(CFG_RATE_5HZ, sizeof(CFG_RATE_5HZ));
+  vTaskDelay(pdMS_TO_TICKS(20));
+  gpsTrackingProfileApplied = true;
+  logLine("[GPS] Tracking profile applied (5Hz)");
+}
+
+static bool gpsHasRealFix() {
+  if (!gps.location.isValid())
+    return false;
+  if (!isfinite(gps.location.lat()) || !isfinite(gps.location.lng()))
+    return false;
+  if (gps.location.lat() == 0.0 && gps.location.lng() == 0.0)
+    return false;
+  return true;
 }
 
 // ============================================================
@@ -435,6 +475,33 @@ static bool tryInjectPositionFromNetwork() {
   return true;
 }
 
+static void gpsAttemptRecovery(int transport) {
+  if (gpsTrackingProfileApplied)
+    return;
+  const unsigned long elapsedMs = millis() - gpsAcqStartMs;
+
+  if (gpsRecoveryStep == 0 && elapsedMs >= 90000UL) {
+    logLine("[GPS] No fix after 90s -> re-injecting time/position and hot reset");
+    tryInjectTimeFromSources();
+    if (transport != 0)
+      tryInjectPositionFromNetwork();
+    injectAssistNow(SerialGPS);
+    sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
+    gpsRecoveryStep = 1;
+    return;
+  }
+
+  if (gpsRecoveryStep == 1 && elapsedMs >= 240000UL) {
+    logLine("[GPS] No fix after 240s -> second aiding cycle and hot reset");
+    tryInjectTimeFromSources();
+    if (transport != 0)
+      tryInjectPositionFromNetwork();
+    injectAssistNow(SerialGPS);
+    sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
+    gpsRecoveryStep = 2;
+  }
+}
+
 // ============================================================
 // Save fix epoch to NVS (called on first fix)
 // ============================================================
@@ -450,6 +517,9 @@ static void saveFixEpoch() {
 // ---------------------- GPS TASK ---------------------------
 void gpsTask(void *pvParameters) {
   logLine("[GPS] Init NEO-M10...");
+  gpsTrackingProfileApplied = false;
+  gpsRecoveryStep = 0;
+  gpsAcqStartMs = millis();
 
   // 0) Autobaud detection
   long baud = detectGPSBaud();
@@ -524,19 +594,9 @@ void gpsTask(void *pvParameters) {
               telem.assistReady ? 1 : 0);
   }
 
-  // 7) Configure GPS (only after baud locked)
+  // 7) Configure GPS for acquisition first; switch to 5Hz only after a real fix.
   logPrintf("[GPS] Configuring at %ld baud...", baud);
-  sendUBX(CFG_NMEA_UART1, sizeof(CFG_NMEA_UART1));
-  vTaskDelay(20);
-  sendUBX(CFG_UBX_PVT_OFF, sizeof(CFG_UBX_PVT_OFF));
-  vTaskDelay(20);
-  sendUBX(CFG_NMEA_GGA_ON, sizeof(CFG_NMEA_GGA_ON));
-  sendUBX(CFG_NMEA_RMC_ON, sizeof(CFG_NMEA_RMC_ON));
-  vTaskDelay(20);
-  sendUBX(CFG_GNSS_FAST, sizeof(CFG_GNSS_FAST));
-  vTaskDelay(20);
-  sendUBX(CFG_RATE_5HZ, sizeof(CFG_RATE_5HZ));
-  vTaskDelay(20);
+  applyGpsAcquisitionProfile();
   logLine("[GPS] Configuration DONE");
 
   // 8) NMEA read loop
@@ -544,7 +604,7 @@ void gpsTask(void *pvParameters) {
     while (SerialGPS.available())
       gps.encode(SerialGPS.read());
 
-    if (gps.location.isUpdated()) {
+    if (gps.location.isUpdated() && gpsHasRealFix()) {
       currentLat = gps.location.lat();
       currentLng = gps.location.lng();
       lastLat = currentLat;
@@ -570,7 +630,10 @@ void gpsTask(void *pvParameters) {
         // Save fix epoch for freshness tracking
         saveFixEpoch();
       }
+      applyGpsTrackingProfile();
     }
+
+    gpsAttemptRecovery(transport);
 
     vTaskDelay(pdMS_TO_TICKS(50));
   }

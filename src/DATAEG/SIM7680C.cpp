@@ -4,6 +4,44 @@
 HardwareSerial simSerial(2);
 SemaphoreHandle_t simMutex = NULL;
 
+static String sim_extractHost(const String &url) {
+  int scheme = url.indexOf("://");
+  int start = (scheme >= 0) ? (scheme + 3) : 0;
+  int end = url.indexOf('/', start);
+  if (end < 0)
+    end = url.length();
+  int colon = url.indexOf(':', start);
+  if (colon >= 0 && colon < end)
+    end = colon;
+  return url.substring(start, end);
+}
+
+static void sim_configureHttpsContext(const String &url) {
+  const String host = sim_extractHost(url);
+  if (host.isEmpty())
+    return;
+
+  simSerial.println("AT+HTTPSSL=1");
+  delay(200);
+  while (simSerial.available())
+    simSerial.read();
+
+  simSerial.println("AT+CSSLCFG=\"sslversion\",0,3");
+  delay(100);
+  simSerial.println("AT+CSSLCFG=\"authmode\",0,0");
+  delay(100);
+  simSerial.println("AT+CSSLCFG=\"ignorertctime\",0,1");
+  delay(100);
+  simSerial.println("AT+CSSLCFG=\"negotiatetime\",0,120");
+  delay(100);
+  simSerial.printf("AT+CSSLCFG=\"sni\",0,\"%s\"\r\n", host.c_str());
+  delay(150);
+  sim_readResponse(300);
+  simSerial.println("AT+CSSLCFG=\"enableSNI\",0,1");
+  delay(150);
+  sim_readResponse(300);
+}
+
 static bool sim_cancelRequested() {
   TelemetrySnapshot snapshot = {};
   getTelemetrySnapshot(&snapshot);
@@ -131,6 +169,14 @@ void init_sim7680c() {
   simSerial.println("AT+CGACT=1,1");
   delay(100);
 
+  // Enable network time sync (NITZ -> CCLK) as early as possible.
+  simSerial.println("AT+CLTS=1");
+  delay(150);
+  sim_readResponse(300);
+  simSerial.println("AT&W");
+  delay(150);
+  sim_readResponse(300);
+
   // SSL relaxed config (demo stability)
   simSerial.println("AT+CSSLCFG=\"sslversion\",0,3");
   delay(100);
@@ -142,6 +188,7 @@ void init_sim7680c() {
   // SMS text mode + CLCC unsolicited
   const char *cmds[] = {
       "AT+CPIN?",  "AT+CSQ", "AT+CREG?", "AT+COPS?", "AT+CPSI?",
+      "AT+CCLK?",
       "AT+CMGF=1", // SMS text mode
       "AT+CLCC=1", // enable +CLCC URC for call state
   };
@@ -523,38 +570,47 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
   if (isHttps) {
-    simSerial.println("AT+HTTPSSL=1");
-    delay(200);
-    while (simSerial.available())
-      simSerial.read();
+    sim_configureHttpsContext(url);
   }
 
   simSerial.println("AT+HTTPINIT");
-  delay(200);
+  String initResp = sim_readResponse(1000);
+  if (initResp.indexOf("ERROR") >= 0) {
+    simSerial.println("AT+HTTPTERM");
+    delay(300);
+    simSerial.println("AT+HTTPINIT");
+    initResp = sim_readResponse(1000);
+  }
   simSerial.println("AT+HTTPPARA=\"CID\",1");
   delay(100);
   simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
-  delay(200);
+  delay(300);
+  simSerial.println("AT+HTTPPARA=\"REDIR\",1");
+  delay(100);
   simSerial.printf("AT+HTTPPARA=\"CONTENT\",\"%s\"\r\n", contentType.c_str());
   delay(200);
 
   simSerial.printf("AT+HTTPDATA=%d,5000\r\n", body.length());
-  delay(300);
+  String dataPrompt = sim_readResponse(1500);
+  if (dataPrompt.indexOf("DOWNLOAD") < 0) {
+    logPrintf("[SIM7680C] HTTPDATA no prompt: %s", dataPrompt.c_str());
+  }
   simSerial.print(body);
-  delay(300);
+  delay(400);
 
   simSerial.println("AT+HTTPACTION=1");
 
-  String actionResp = sim_readResponse(8000);
+  String actionResp = sim_readResponse(30000);
   bool ok = false;
   int dataLen = 0;
+  int statusCode = -1;
 
   int si = actionResp.indexOf("+HTTPACTION: 1,");
   if (si != -1) {
     int ci = actionResp.indexOf(",", si + 15);
     if (ci != -1) {
       String st = actionResp.substring(si + 15, ci);
-      int statusCode = st.toInt();
+      statusCode = st.toInt();
       logPrintf("[SIM7680C] HTTP Status: %s", st.c_str());
       ok = (statusCode >= 200 && statusCode < 300);
 
@@ -562,9 +618,11 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
       if (ci2 == -1) ci2 = actionResp.length();
       dataLen = actionResp.substring(ci + 1, ci2).toInt();
     }
+  } else {
+    logPrintf("[SIM7680C] HTTPACTION missing: %s", actionResp.c_str());
   }
 
-  if (ok && dataLen > 0) {
+  if (dataLen > 0) {
     simSerial.printf("AT+HTTPREAD=0,%d\r\n", dataLen);
     String readResp = sim_readResponse(2000 + dataLen);
 
@@ -584,6 +642,11 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
         }
       }
     }
+    if (!ok && outResponse.length() > 0) {
+      logPrintf("[SIM7680C] HTTP error body: %s", outResponse.c_str());
+    }
+  } else if (!ok) {
+    logPrintf("[SIM7680C] HTTP failure status=%d len=%d", statusCode, dataLen);
   }
 
   simSerial.println("AT+HTTPTERM");
@@ -609,23 +672,40 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
+  bool isHttps = url.startsWith("https");
+
+  if (isHttps) {
+    sim_configureHttpsContext(url);
+  }
+
   simSerial.println("AT+HTTPINIT");
-  delay(200);
+  String initResp = sim_readResponse(1000);
+  if (initResp.indexOf("ERROR") >= 0) {
+    simSerial.println("AT+HTTPTERM");
+    delay(300);
+    simSerial.println("AT+HTTPINIT");
+    initResp = sim_readResponse(1000);
+  }
   simSerial.println("AT+HTTPPARA=\"CID\",1");
   delay(100);
   simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
-  delay(200);
+  delay(300);
+  simSerial.println("AT+HTTPPARA=\"REDIR\",1");
+  delay(100);
   simSerial.printf("AT+HTTPPARA=\"CONTENT\",\"%s\"\r\n", contentType.c_str());
   delay(200);
 
   simSerial.printf("AT+HTTPDATA=%d,5000\r\n", body.length());
-  delay(300);
+  String dataPrompt = sim_readResponse(1500);
+  if (dataPrompt.indexOf("DOWNLOAD") < 0) {
+    logPrintf("[SIM7680C] HTTPDATA no prompt: %s", dataPrompt.c_str());
+  }
   simSerial.print(body);
-  delay(300);
+  delay(400);
 
   simSerial.println("AT+HTTPACTION=1"); // POST
 
-  String response = sim_readResponse(8000);
+  String response = sim_readResponse(30000);
   bool ok = false;
   telemetrySetTrackSimCode(-1);
 
@@ -785,10 +865,7 @@ int SIM7680C_httpGetToFile(const String &url, const char *filePath) {
   // Enable SSL for HTTPS
   bool isHttps = url.startsWith("https");
   if (isHttps) {
-    simSerial.println("AT+HTTPSSL=1");
-    delay(200);
-    while (simSerial.available())
-      simSerial.read();
+    sim_configureHttpsContext(url);
   }
 
   // Init HTTP service
@@ -992,4 +1069,99 @@ int SIM7680C_httpGetToFile(const String &url, const char *filePath) {
     SIM_setCapability(SIM_CAP_HTTP_OK);
 
   return totalRead;
+}
+
+bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse) {
+  outResponse = "";
+  if (!SIM_hasCapability(SIM_CAP_DATA_OK) && !sim_detectDataSession())
+    return false;
+  if (telemetryIsSosActive())
+    return false;
+
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+
+  logPrintf("[SIM-GET] URL: %s", url.c_str());
+
+  bool isHttps = url.startsWith("https");
+  if (isHttps) {
+    sim_configureHttpsContext(url);
+  }
+
+  simSerial.println("AT+HTTPINIT");
+  String r = sim_readResponse(1000);
+  if (r.indexOf("ERROR") >= 0) {
+    simSerial.println("AT+HTTPTERM");
+    delay(500);
+    simSerial.println("AT+HTTPINIT");
+    r = sim_readResponse(1000);
+  }
+
+  simSerial.println("AT+HTTPPARA=\"CID\",1");
+  delay(100);
+  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  delay(300);
+  simSerial.println("AT+HTTPPARA=\"REDIR\",1");
+  delay(100);
+  simSerial.println("AT+HTTPACTION=0");
+
+  String actionResp = "";
+  unsigned long t0 = millis();
+  bool gotAction = false;
+  while (millis() - t0 < 30000) {
+    while (simSerial.available()) {
+      char c = simSerial.read();
+      actionResp += c;
+    }
+    if (actionResp.indexOf("+HTTPACTION:") >= 0) {
+      gotAction = true;
+      break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+
+  int statusCode = 0;
+  int dataLen = 0;
+  if (gotAction) {
+    int ai = actionResp.indexOf("+HTTPACTION: 0,");
+    if (ai >= 0) {
+      int c1 = actionResp.indexOf(",", ai + 15);
+      if (c1 > 0) {
+        statusCode = actionResp.substring(ai + 15, c1).toInt();
+        dataLen = actionResp.substring(c1 + 1).toInt();
+      }
+    }
+  } else {
+    logPrintf("[SIM-GET] HTTPACTION missing: %s", actionResp.c_str());
+  }
+
+  logPrintf("[SIM-GET] HTTP %d, %d bytes", statusCode, dataLen);
+
+  bool ok = false;
+  if (statusCode == 200 && dataLen > 0) {
+    simSerial.printf("AT+HTTPREAD=0,%d\r\n", dataLen);
+    String readResp = sim_readResponse(2000 + dataLen);
+    int hreadIdx = readResp.indexOf("+HTTPREAD: ");
+    if (hreadIdx >= 0) {
+      int nlIdx = readResp.indexOf("\r\n", hreadIdx);
+      if (nlIdx > 0) {
+        int endIdx = readResp.lastIndexOf("\r\nOK");
+        if (endIdx > nlIdx) {
+          outResponse = readResp.substring(nlIdx + 2, endIdx);
+        } else {
+          outResponse = readResp.substring(nlIdx + 2);
+        }
+      }
+    }
+    ok = outResponse.length() > 0;
+  }
+
+  simSerial.println("AT+HTTPTERM");
+  delay(200);
+  while (simSerial.available())
+    simSerial.read();
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  return ok;
 }

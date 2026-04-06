@@ -11,6 +11,7 @@ import {
   type ThemeMode,
 } from "../i18n";
 import {
+  fetchDeviceLocation,
   fetchDevices,
   fetchHistory,
   renameDevice,
@@ -140,6 +141,16 @@ export function App() {
     setDevices((prev) =>
       prev.map((d) => d.deviceId === deviceId ? { ...d, deviceName: updatedName } : d)
     );
+  };
+
+  const handleFetchCurrentLocation = async (deviceId: string) => {
+    const current = await fetchDeviceLocation(deviceId);
+    setDevices((prev) =>
+      prev.map((device) =>
+        device.deviceId === deviceId ? { ...device, ...current } : device
+      )
+    );
+    setLastUpdatedAt(Date.now());
   };
 
   /** When user clicks the map in pick mode */
@@ -399,6 +410,7 @@ export function App() {
                 device={selectedDevice}
                 loading={loadingDevices}
                 onRename={handleRename}
+                onFetchCurrentLocation={handleFetchCurrentLocation}
               />
 
               {/* Home Panel */}

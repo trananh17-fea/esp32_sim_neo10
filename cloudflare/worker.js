@@ -127,6 +127,122 @@ function jsonResponse(data, corsHeaders, status = 200) {
     });
 }
 
+function parseWifiQuery(value) {
+    const raw = normalizeString(value);
+    if (!raw) return [];
+    return raw
+        .split(";")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => {
+            const [bssidRaw, rssiRaw, chRaw] = item.split("|");
+            const hex = normalizeString(bssidRaw).replace(/[^a-fA-F0-9]/g, "").toUpperCase();
+            if (hex.length !== 12) return null;
+            const bssid = hex.match(/.{1,2}/g).join(":");
+            const rssi = normalizeNumber(rssiRaw);
+            const channel = normalizeNumber(chRaw);
+            if (rssi === null || channel === null) return null;
+            return { bssid, rssi, channel };
+        })
+        .filter(Boolean);
+}
+
+async function geolocateFromQuery(url) {
+    const provider = normalizeString(url.searchParams.get("provider"), "unwiredlabs").toLowerCase();
+    const apiKey = normalizeString(url.searchParams.get("key"));
+    const radio = normalizeString(url.searchParams.get("radio"), "lte");
+    const mcc = normalizeNumber(url.searchParams.get("mcc"));
+    const mnc = normalizeNumber(url.searchParams.get("mnc"));
+    const lac = normalizeNumber(url.searchParams.get("lac"));
+    const cid = normalizeNumber(url.searchParams.get("cid"));
+    const dbm = normalizeNumber(url.searchParams.get("dbm")) ?? -113;
+    const wifi = parseWifiQuery(url.searchParams.get("wifi"));
+
+    if (!apiKey || mcc === null || mnc === null || lac === null || cid === null) {
+        return { ok: false, status: 400, body: { error: "Missing geolocation params" } };
+    }
+
+    let upstreamUrl = "";
+    let payload;
+    if (provider === "google") {
+        upstreamUrl = `https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(apiKey)}`;
+        payload = {
+            radioType: radio,
+            considerIp: true,
+            cellTowers: [
+                {
+                    mobileCountryCode: mcc,
+                    mobileNetworkCode: mnc,
+                    locationAreaCode: lac,
+                    cellId: cid,
+                    signalStrength: dbm,
+                },
+            ],
+            wifiAccessPoints: wifi.map((ap) => ({
+                macAddress: ap.bssid,
+                signalStrength: ap.rssi,
+                channel: ap.channel,
+            })),
+        };
+    } else {
+        upstreamUrl = "https://us1.unwiredlabs.com/v2/process.php";
+        payload = {
+            token: apiKey,
+            radio,
+            mcc,
+            mnc,
+            cells: [{ lac, cid }],
+            wifi: wifi.map((ap) => ({
+                bssid: ap.bssid,
+                signal: ap.rssi,
+                channel: ap.channel,
+            })),
+            address: 1,
+        };
+    }
+
+    const upstream = await fetch(upstreamUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    const text = await upstream.text();
+    let parsed;
+    try {
+        parsed = JSON.parse(text);
+    } catch {
+        parsed = { raw: text };
+    }
+
+    if (!upstream.ok) {
+        return {
+            ok: false,
+            status: upstream.status,
+            body: { error: "Upstream geolocation failed", provider, upstreamStatus: upstream.status, upstreamBody: parsed },
+        };
+    }
+
+    const location = parsed.location && typeof parsed.location === "object" ? parsed.location : parsed;
+    const lat = normalizeNumber(location.lat);
+    const lng = normalizeNumber(location.lng ?? location.lon);
+    const accuracy = normalizeNumber(parsed.accuracy ?? location.accuracy) ?? 9999;
+
+    if (!isValidCoordPair(lat, lng)) {
+        return {
+            ok: false,
+            status: 502,
+            body: { error: "Invalid upstream location", provider, upstreamBody: parsed },
+        };
+    }
+
+    return {
+        ok: true,
+        status: 200,
+        body: { ok: true, provider, lat, lng, accuracy },
+    };
+}
+
 function parseTimestampParam(value) {
     if (!value) return null;
     const parsed = Number(value);
@@ -372,6 +488,19 @@ export default {
 
         if (request.method === "OPTIONS") {
             return new Response(null, { headers: corsHeaders });
+        }
+
+        if (request.method === "GET" && url.pathname === "/api/geolocate") {
+            try {
+                const result = await geolocateFromQuery(url);
+                return jsonResponse(result.body, corsHeaders, result.status);
+            } catch (error) {
+                return jsonResponse(
+                    { error: error instanceof Error ? error.message : "Unknown error" },
+                    corsHeaders,
+                    500
+                );
+            }
         }
 
         if (request.method === "POST" && url.pathname === "/update") {

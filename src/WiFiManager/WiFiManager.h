@@ -5,5 +5,7 @@
 
 // The ONLY place WiFi mode is configured. Do NOT set WiFi.mode() elsewhere.
 void initWiFi();
+void wifiEnterScanMode();
+void wifiRestoreApStaMode();
 
 #endif

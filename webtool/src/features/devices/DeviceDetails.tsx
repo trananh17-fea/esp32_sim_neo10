@@ -7,6 +7,7 @@ type DeviceDetailsProps = {
   device: TrackerDeviceSummary | null;
   loading: boolean;
   onRename: (deviceId: string, deviceName: string) => Promise<void>;
+  onFetchCurrentLocation: (deviceId: string) => Promise<void>;
 };
 
 function formatCoordinate(value?: number) {
@@ -19,9 +20,16 @@ function formatDistance(value?: number) {
   return `${Math.round(value)} m`;
 }
 
-export function DeviceDetails({ copy, device, loading, onRename }: DeviceDetailsProps) {
+export function DeviceDetails({
+  copy,
+  device,
+  loading,
+  onRename,
+  onFetchCurrentLocation,
+}: DeviceDetailsProps) {
   const [draftName, setDraftName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [fetchingLocation, setFetchingLocation] = useState(false);
 
   useEffect(() => {
     setDraftName(device?.deviceName ?? "");
@@ -75,6 +83,21 @@ export function DeviceDetails({ copy, device, loading, onRename }: DeviceDetails
           type="button"
         >
           {saving ? copy.saving : copy.save}
+        </button>
+      </div>
+
+      <div className="rename-row">
+        <button
+          className="action-button"
+          disabled={fetchingLocation}
+          onClick={async () => {
+            setFetchingLocation(true);
+            try { await onFetchCurrentLocation(device.deviceId); }
+            finally { setFetchingLocation(false); }
+          }}
+          type="button"
+        >
+          {fetchingLocation ? copy.fetchingLocation : copy.fetchCurrentLocation}
         </button>
       </div>
 

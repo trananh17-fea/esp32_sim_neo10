@@ -149,6 +149,8 @@ void loadDataFromRom() {
   nvsReadBool("NLOC_EN", &cfg.netlocEnable, true);
   nvsReadStr("NLOC_KEY", cfg.netlocApiKey, sizeof(cfg.netlocApiKey), "pk.aae008bb12d51de2ae1af94369c73b14");
   nvsReadStr("NLOC_PRV", cfg.netlocProvider, sizeof(cfg.netlocProvider), "unwiredlabs");
+  nvsReadStr("NLOC_URL", cfg.netlocRelayUrl, sizeof(cfg.netlocRelayUrl),
+             "https://gps-tracker.ahcntab.workers.dev/api/geolocate");
 
   applyConfigSnapshot(&cfg);
 
@@ -188,6 +190,7 @@ void saveAllConfig() {
   nvs_set_u8(nvsHandle, "NLOC_EN", cfg.netlocEnable ? 1 : 0);
   nvs_set_str(nvsHandle, "NLOC_KEY", cfg.netlocApiKey);
   nvs_set_str(nvsHandle, "NLOC_PRV", cfg.netlocProvider);
+  nvs_set_str(nvsHandle, "NLOC_URL", cfg.netlocRelayUrl);
 
   nvs_commit(nvsHandle);
   logLine("[STORAGE] Saved");
