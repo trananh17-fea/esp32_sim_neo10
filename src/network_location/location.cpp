@@ -28,10 +28,9 @@ static String urlEncode(const String &input) {
   const char *hex = "0123456789ABCDEF";
   for (size_t i = 0; i < input.length(); ++i) {
     unsigned char c = static_cast<unsigned char>(input[i]);
-    const bool safe =
-        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
-        c == '~';
+    const bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                      (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+                      c == '.' || c == '~';
     if (safe) {
       out += static_cast<char>(c);
     } else {
@@ -81,7 +80,6 @@ static void ensureRelayPingTested(const String &relayBase) {
     logLine("[NETLOC] SIM relay ping failed");
   }
 }
-
 
 static void cacheWiFiScanDebug(const wifi_ap_record_t *records, uint16_t count,
                                bool ok) {
@@ -183,10 +181,10 @@ static int scanNearbyWiFi(String *googleJson, String *unwiredJson) {
     if (bssid.length() < 11)
       continue;
 
-    sscanf(bssid.c_str(), "%hhX:%hhX:%hhX:%hhX:%hhX:%hhX", &apRecords[count].bssid[0],
-           &apRecords[count].bssid[1], &apRecords[count].bssid[2],
-           &apRecords[count].bssid[3], &apRecords[count].bssid[4],
-           &apRecords[count].bssid[5]);
+    sscanf(bssid.c_str(), "%hhX:%hhX:%hhX:%hhX:%hhX:%hhX",
+           &apRecords[count].bssid[0], &apRecords[count].bssid[1],
+           &apRecords[count].bssid[2], &apRecords[count].bssid[3],
+           &apRecords[count].bssid[4], &apRecords[count].bssid[5]);
     apRecords[count].rssi = rssi;
     apRecords[count].primary = channel;
 
@@ -232,8 +230,9 @@ static int scanNearbyWiFi(String *googleJson, String *unwiredJson) {
   for (int i = 0; i < count; ++i) {
     char bssidBuf[18];
     snprintf(bssidBuf, sizeof(bssidBuf), "%02X:%02X:%02X:%02X:%02X:%02X",
-             apRecords[i].bssid[0], apRecords[i].bssid[1], apRecords[i].bssid[2],
-             apRecords[i].bssid[3], apRecords[i].bssid[4], apRecords[i].bssid[5]);
+             apRecords[i].bssid[0], apRecords[i].bssid[1],
+             apRecords[i].bssid[2], apRecords[i].bssid[3],
+             apRecords[i].bssid[4], apRecords[i].bssid[5]);
     logPrintf("[NETLOC] AP[%d] bssid=%s rssi=%d ch=%d", i, bssidBuf,
               apRecords[i].rssi, apRecords[i].primary);
   }
@@ -357,7 +356,7 @@ static bool doWiFiGeolocation() {
 
   String body = "";
   bool isUnwired = (strcmp(cfg.netlocProvider, "unwiredlabs") == 0);
-  
+
   if (isUnwired) {
     body = "{\"token\":\"";
     body += cfg.netlocApiKey;
@@ -453,7 +452,8 @@ static bool doHybridGeolocationViaSIMApi() {
 
   String googleWiFiJson;
   String unwiredWiFiJson;
-  int wifiCount = ensureWiFiFingerprint(&googleWiFiJson, &unwiredWiFiJson, false);
+  int wifiCount =
+      ensureWiFiFingerprint(&googleWiFiJson, &unwiredWiFiJson, false);
 
   int csq = sim_readCSQ();
   int dbm = (csq >= 0 && csq <= 31) ? (-113 + 2 * csq) : -113;
@@ -480,8 +480,9 @@ static bool doHybridGeolocationViaSIMApi() {
   relayUrl += "&wifi=";
   relayUrl += urlEncode(LAST_WIFI_SCAN_COMPACT);
 
-  logPrintf("[NETLOC] Hybrid geoloc via SIM: wifiAPs=%d radio=%s cell=%d/%d/%d/%d",
-            wifiCount, radio.c_str(), mcc, mnc, lac, cellId);
+  logPrintf(
+      "[NETLOC] Hybrid geoloc via SIM: wifiAPs=%d radio=%s cell=%d/%d/%d/%d",
+      wifiCount, radio.c_str(), mcc, mnc, lac, cellId);
   logPrintf("[NETLOC] Hybrid geoloc urlLen=%d wifiCompactLen=%d relayPing=%d",
             relayUrl.length(), LAST_WIFI_SCAN_COMPACT.length(),
             RELAY_PING_OK ? 1 : 0);
@@ -502,8 +503,8 @@ static bool doHybridGeolocationViaSIMApi() {
     return false;
   }
 
-  logPrintf("[NETLOC] Hybrid geoloc: lat=%.6f lng=%.6f acc=%.0fm",
-            lat, lng, accuracy);
+  logPrintf("[NETLOC] Hybrid geoloc: lat=%.6f lng=%.6f acc=%.0fm", lat, lng,
+            accuracy);
   telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
   return true;
 }
@@ -579,8 +580,8 @@ static bool doCellGeolocationViaSIMApi() {
     return false;
   }
 
-  logPrintf("[NETLOC] SIM internet geoloc: lat=%.6f lng=%.6f acc=%.0fm",
-            lat, lng, accuracy);
+  logPrintf("[NETLOC] SIM internet geoloc: lat=%.6f lng=%.6f acc=%.0fm", lat,
+            lng, accuracy);
   telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
   return true;
 }
@@ -589,46 +590,27 @@ static bool doCellGeolocationViaSIMApi() {
 // Cell Geolocation via AT+CLBS (built-in LBS on some SIM modules)
 // Response: +CLBS: 0,<lng>,<lat>,<accuracy>
 // ============================================================
+// Trong file location.cpp
+
 static bool doCellGeolocationCLBS() {
-  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK)) {
-    logLine("[NETLOC] SIM not ready for CLBS");
+  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK))
     return false;
-  }
 
-  TelemetrySnapshot preTelem = {};
-  getTelemetrySnapshot(&preTelem);
-  if (preTelem.sosActive) {
-    logLine("[NETLOC] SOS active, skipping CLBS to free modem");
-    return false;
-  }
-
+  // Lấy quyền điều khiển SIM
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  // Enable CLBS
-  simSerial.println("AT+CLBSCFG=1,3,\"lbs-simcom.com\",0");
-  vTaskDelay(pdMS_TO_TICKS(500));
-  while (simSerial.available())
-    simSerial.read();
+  // Gửi lệnh lấy vị trí tương đối từ trạm phát sóng
+  simSerial.println("AT+CLBS=1,1");
 
-  simSerial.println("AT+CLBS=4,1");
   String resp = "";
   unsigned long t0 = millis();
-  while (millis() - t0 < 15000) {
-    TelemetrySnapshot telem = {};
-    getTelemetrySnapshot(&telem);
-    if (telem.sosActive) {
-      logLine("[NETLOC] SOS triggered! Aborting CLBS");
-      break;
-    }
-
+  // Chờ phản hồi từ module SIM (tối đa 10s)
+  while (millis() - t0 < 10000) {
     while (simSerial.available()) {
-      char c = simSerial.read();
-      resp += c;
+      resp += (char)simSerial.read();
     }
-    if (resp.indexOf("+CLBS:") >= 0 && resp.indexOf("\n", resp.indexOf("+CLBS:")) >= 0)
-      break;
-    if (resp.indexOf("ERROR") >= 0)
+    if (resp.indexOf("+CLBS:") >= 0 && resp.indexOf("OK") >= 0)
       break;
     vTaskDelay(pdMS_TO_TICKS(100));
   }
@@ -636,41 +618,24 @@ static bool doCellGeolocationCLBS() {
   if (simMutex)
     xSemaphoreGive(simMutex);
 
-  // Parse +CLBS: 0,<lng>,<lat>,<accuracy>
+  // Phân tích phản hồi: +CLBS: <status>,<lat>,<lng>,<precision>
+  // Ví dụ: +CLBS: 0,10.935262,106.737457,550
   int idx = resp.indexOf("+CLBS: 0,");
-  if (idx < 0) {
-    logPrintf("[NETLOC] CLBS failed or unsupported: %s", resp.c_str());
-    return false;
+  if (idx >= 0) {
+    idx += 9; // Bỏ qua phần "+CLBS: 0,"
+    int c1 = resp.indexOf(',', idx);
+    double lat = resp.substring(idx, c1).toDouble();
+    int c2 = resp.indexOf(',', c1 + 1);
+    double lng = resp.substring(c1 + 1, c2).toDouble();
+    float accuracy = resp.substring(c2 + 1).toFloat();
+
+    // Cập nhật vào Telemetry để các hàm khác có thể sử dụng
+    telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
+    return true;
   }
 
-  idx += 9; // skip "+CLBS: 0,"
-  // Parse lng
-  int c1 = resp.indexOf(',', idx);
-  if (c1 < 0)
-    return false;
-  double lng = resp.substring(idx, c1).toDouble();
-
-  // Parse lat
-  int c2 = resp.indexOf(',', c1 + 1);
-  if (c2 < 0)
-    return false;
-  double lat = resp.substring(c1 + 1, c2).toDouble();
-
-  // Parse accuracy
-  float accuracy = resp.substring(c2 + 1).toFloat();
-  if (accuracy <= 0)
-    accuracy = 500; // default if not reported
-
-  if (!normalizeLocationPair(&lat, &lng)) {
-    logLine("[NETLOC] CLBS returned invalid coordinates");
-    return false;
-  }
-
-  logPrintf("[NETLOC] Cell CLBS: lat=%.6f lng=%.6f acc=%.0fm", lat, lng,
-            accuracy);
-
-  telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
-  return true;
+  logLine("[NETLOC] LBS Scan failed hoặc không có sóng");
+  return false;
 }
 
 // ============================================================
@@ -687,30 +652,26 @@ static bool doCellGeolocationCLBS() {
 bool acquireNetworkLocationNow() {
   TelemetrySnapshot telem = {};
   getTelemetrySnapshot(&telem);
-  if (telem.sosActive) {
-    logLine("[NETLOC] SOS active, skip immediate acquire");
+  if (telem.sosActive)
     return false;
-  }
 
-  // For ESP32-only testing, WiFi geolocation is the only available source
-  // when SIM/GPS are absent. It still needs a real STA uplink to call the
-  // geolocation API, but it should be attempted first when available.
+  // 1. Thử WiFi Geolocation trước (độ chính xác cao nhất ~20-50m)
   if (WiFi.status() == WL_CONNECTED) {
     if (doWiFiGeolocation())
       return true;
-    logLine("[NETLOC] WiFi uplink present but WiFi geoloc failed, trying SIM-based methods");
   }
 
-  if (WiFi.status() != WL_CONNECTED && !SIM_hasCapability(SIM_CAP_DATA_OK)) {
-    logLine("[NETLOC] No internet uplink: AP-only mode cannot resolve WiFi scans to coordinates");
-  }
+  // 2. Thử Hybrid qua API (Cell + WiFi BSSID)
+  if (doHybridGeolocationViaSIMApi())
+    return true;
 
-  bool success = doHybridGeolocationViaSIMApi();
-  if (!success)
-    success = doCellGeolocationViaSIMApi();
-  if (!success)
-    logLine("[NETLOC] Trusted coarse geolocation unavailable (CLBS disabled)");
-  return success;
+  // 3. KÍCH HOẠT LẠI: Dùng trực tiếp trạm phát sóng (LBS) của nhà mạng qua
+  // AT+CLBS Đây là cách bạn muốn (vị trí tương đối khi ko có internet/GPS)
+  if (doCellGeolocationCLBS())
+    return true;
+
+  logLine("[NETLOC] Tất cả các phương thức lấy vị trí mạng đều thất bại");
+  return false;
 }
 
 void networkLocationTask(void *pvParameters) {
@@ -768,8 +729,8 @@ void networkLocationTask(void *pvParameters) {
                             : 100U;
         if (accM > 100000U)
           accM = 100000U;
-        GPS_injectApproxPosition(postTelem.networkLocLat, postTelem.networkLocLng,
-                                 accM);
+        GPS_injectApproxPosition(postTelem.networkLocLat,
+                                 postTelem.networkLocLng, accM);
 
         time_t now = time(nullptr);
         if (now > 1704067200UL) {

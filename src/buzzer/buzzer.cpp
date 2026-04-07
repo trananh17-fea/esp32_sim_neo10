@@ -43,48 +43,51 @@ void buzzer_beep(int duration, int times, int gap) {
   }
 }
 
+// Cấu trúc để định nghĩa một phần của mã Morse
+struct MorsePattern {
+  int duration; // Độ dài tiếng bíp (ms)
+  int count;    // Số lần bíp
+};
+
 void buzzer_sos() {
-  while (buzzerActive) // chạy cho đến khi tắt
-  {
-    // 3 tiếng ngắn (S)
-    for (int i = 0; i < 3; i++) {
-      if (!buzzerActive)
-        break;
-      buzzer_beep(100, 1, 100);
-      vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    if (!buzzerActive)
-      break;
-    vTaskDelay(pdMS_TO_TICKS(200));
+  // Định nghĩa mô hình SOS: 3 ngắn (100ms), 3 dài (400ms), 3 ngắn (100ms)
+  const MorsePattern sos[] = {{100, 3}, {400, 3}, {100, 3}};
+  const int gapBetweenLetters = 200; // Nghỉ giữa các chữ cái (S, O, S)
 
-    // 3 tiếng dài (O)
-    for (int i = 0; i < 3; i++) {
-      if (!buzzerActive)
-        break;
-      buzzer_beep(400, 1, 100);
-      vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    if (!buzzerActive)
-      break;
-    vTaskDelay(pdMS_TO_TICKS(200));
+  while (buzzerActive) {
+    for (int i = 0; i < 3; i++) { // Duyệt qua S, O, S
+      for (int j = 0; j < sos[i].count; j++) {
+        if (!buzzerActive)
+          goto stop; // Thoát ngay lập tức nếu bị hủy
 
-    // 3 tiếng ngắn (S)
-    for (int i = 0; i < 3; i++) {
+        // Thực hiện bíp
+        buzzer_on(BUZZER_FREQ);
+
+        // Thay vì delay() cứng, chia nhỏ thời gian để check cờ hủy
+        int remaining = sos[i].duration;
+        while (remaining > 0 && buzzerActive) {
+          int step = (remaining > 50) ? 50 : remaining;
+          vTaskDelay(pdMS_TO_TICKS(step));
+          remaining -= step;
+        }
+
+        buzzer_off();
+        vTaskDelay(pdMS_TO_TICKS(
+            100)); // Khoảng nghỉ giữa các nhịp bíp trong cùng 1 chữ
+      }
+
       if (!buzzerActive)
-        break;
-      buzzer_beep(100, 1, 100);
-      vTaskDelay(pdMS_TO_TICKS(10));
+        goto stop;
+      vTaskDelay(pdMS_TO_TICKS(gapBetweenLetters)); // Nghỉ giữa S-O, O-S
     }
 
-    // nghỉ 1 giây rồi lặp lại
-    for (int k = 0; k < 10; k++) {
-      if (!buzzerActive)
-        break;
+    // Nghỉ 1 giây sau khi xong một chu kỳ SOS (chia nhỏ để nhạy lệnh tắt)
+    for (int k = 0; k < 10 && buzzerActive; k++) {
       vTaskDelay(pdMS_TO_TICKS(100));
     }
   }
 
-  // Khi thoát vòng lặp, đảm bảo tắt còi
+stop:
   buzzer_off();
   Serial.println("[Buzzer] SOS Stopped");
 }

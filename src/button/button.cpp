@@ -53,9 +53,8 @@ static void startSosTask(bool enableBuzzer) {
     return;
   }
 
-  BaseType_t ok =
-      xTaskCreatePinnedToCore(sosTask, "sosTask", 8192, NULL, 2,
-                              &sSosTaskHandle, 1);
+  BaseType_t ok = xTaskCreatePinnedToCore(sosTask, "sosTask", 8192, NULL, 2,
+                                          &sSosTaskHandle, 1);
   if (ok != pdPASS) {
     sSosTaskHandle = NULL;
     logLine("[SOS] Failed to create sosTask");
@@ -95,64 +94,58 @@ static void cancelSosAndStopBuzzer() {
 }
 
 void buttonTask(void *pvParameters) {
-  logLine("[Button] Task started");
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-
-  bool lastRawState = HIGH;
-  bool stableState = HIGH;
-  unsigned long lastDebounceTime = 0;
+  bool lastState = HIGH;
   unsigned long pressedTime = 0;
-  unsigned long lastClickTime = 0;
+  unsigned long lastReleaseTime = 0;
   int clickCount = 0;
 
-  const unsigned long debounceMs = 40;
-  const unsigned long minShortPressMs = 60;
-  const unsigned long shortPressMaxMs = 400;
-  const unsigned long doubleClickGapMs = 400;
-
   while (true) {
-    bool rawState = digitalRead(BUTTON_PIN);
+    bool currentState = digitalRead(BUTTON_PIN);
 
-    if (rawState != lastRawState) {
-      lastDebounceTime = millis();
-      lastRawState = rawState;
+    // Phát hiện nhấn xuống
+    if (currentState == LOW && lastState == HIGH) {
+      pressedTime = millis();
     }
 
-    if ((millis() - lastDebounceTime) >= debounceMs && rawState != stableState) {
-      stableState = rawState;
+    // Phát hiện thả nút
+    if (currentState == HIGH && lastState == LOW) {
+      unsigned long duration = millis() - pressedTime;
 
-      if (stableState == LOW) {
-        pressedTime = millis();
-      } else {
-        const unsigned long pressDurationMs = millis() - pressedTime;
-
-        if (pressDurationMs >= minShortPressMs &&
-            pressDurationMs < shortPressMaxMs) {
+      // 1. Logic Nhấn giữ (Hold) - Ưu tiên hàng đầu
+      if (duration >= 1000 && duration <= 3000) {
+        logLine("[Button] Hold 1-3s -> SOS + BUZZER");
+        startSosTask(true); // Có còi
+        clickCount = 0;
+      } else if (duration > 3000) {
+        logLine("[Button] Hold >3s -> CANCEL SOS");
+        cancelSosAndStopBuzzer();
+        clickCount = 0;
+      }
+      // 2. Logic Nhấn ngắn (Click)
+      else if (duration >= 60 && duration < 400) {
+        unsigned long gap = millis() - lastReleaseTime;
+        if (gap < 400) { // doubleClickGapMs
           clickCount++;
-          if (clickCount == 1) {
-            lastClickTime = millis();
-          } else if (clickCount == 2 &&
-                     (millis() - lastClickTime) < doubleClickGapMs) {
-            logLine("[Button] Double Click -> SOS silent (SMS + CALL)");
-            startSosTask(false);
-            clickCount = 0;
-          }
-        } else if (pressDurationMs >= 1000 && pressDurationMs <= 3000) {
-          logLine("[Button] Hold 1-3s -> SOS + BUZZER");
-          startSosTask(true);
-          clickCount = 0;
-        } else if (pressDurationMs > 3000) {
-          cancelSosAndStopBuzzer();
+        } else {
+          clickCount = 1;
+        }
+        lastReleaseTime = millis();
+
+        if (clickCount == 2) {
+          logLine("[Button] Double Click -> SOS Silent (SMS + CALL)");
+          startSosTask(false); // Không còi
           clickCount = 0;
         }
       }
     }
 
-    if (clickCount > 0 && stableState == HIGH &&
-        (millis() - lastClickTime) > doubleClickGapMs) {
+    // Reset clickCount nếu quá thời gian chờ nhấn lần 2
+    if (clickCount > 0 && (millis() - lastReleaseTime) > 400) {
       clickCount = 0;
     }
 
+    lastState = currentState;
     vTaskDelay(pdMS_TO_TICKS(20));
   }
 }

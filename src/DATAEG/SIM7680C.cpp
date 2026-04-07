@@ -243,8 +243,7 @@ void init_sim7680c() {
 
   // SMS text mode + CLCC unsolicited
   const char *cmds[] = {
-      "AT+CPIN?",  "AT+CSQ", "AT+CREG?", "AT+COPS?", "AT+CPSI?",
-      "AT+CCLK?",
+      "AT+CPIN?",  "AT+CSQ", "AT+CREG?", "AT+COPS?", "AT+CPSI?", "AT+CCLK?",
       "AT+CMGF=1", // SMS text mode
       "AT+CLCC=1", // enable +CLCC URC for call state
   };
@@ -426,58 +425,57 @@ bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio) {
 // ============================================================
 // Send SMS to a specific number
 // ============================================================
+
+bool SMS_DRY_RUN = true; // Đặt là true để chỉ LOG, false để GỬI THẬT
 void SIM7680C_sendSMS_to(const char *number, const String &message) {
   if (!number || strlen(number) < 3)
     return;
-  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered()) {
-    logPrintf("[SIM7680C] SMS skipped, capability=%s",
-              SIM_capabilityName(SIM_getCapability()));
+
+  // LUÔN LOG RA TRƯỚC ĐỂ KIỂM TRA TỌA ĐỘ
+  logPrintf("[SMS-LOG] Dự định gửi tới: %s", number);
+  logPrintf("[SMS-LOG] Nội dung: %s", message.c_str());
+
+  if (SMS_DRY_RUN) {
+    logLine("[SMS-LOG] >>> CHẾ ĐỘ CHẠY THỬ: Đã chặn lệnh gửi thật để tiết kiệm "
+            "chi phí.");
     return;
   }
+
+  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered()) {
+    logLine("[SIM7680C] SMS skipped, chưa có sóng");
+    return;
+  }
+
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  if (sim_cancelRequested()) {
-    if (simMutex)
-      xSemaphoreGive(simMutex);
-    logLine("[SIM7680C] SMS cancelled before send");
-    return;
-  }
-
-  logPrintf("[SIM7680C] SMS -> %s", number);
-
+  while (simSerial.available())
+    simSerial.read();
   simSerial.printf("AT+CMGS=\"%s\"\r\n", number);
-  delay(300);
-  if (sim_cancelRequested()) {
-    simSerial.write(27); // ESC cancels text-mode SMS input
-    delay(100);
-    while (simSerial.available())
-      simSerial.read();
-    if (simMutex)
-      xSemaphoreGive(simMutex);
-    logLine("[SIM7680C] SMS cancelled before payload");
-    return;
-  }
-  simSerial.print(message);
-  delay(100);
-  simSerial.write(26); // Ctrl+Z
 
-  unsigned long t0 = millis();
-  while (millis() - t0 < 5000) {
-    if (sim_cancelRequested()) {
-      logLine("[SIM7680C] SMS cancel requested while waiting modem");
+  bool gotPrompt = false;
+  unsigned long waitT0 = millis();
+  while (millis() - waitT0 < 5000) {
+    if (simSerial.available() && simSerial.read() == '>') {
+      gotPrompt = true;
       break;
     }
-    if (simSerial.available())
-      Serial.write(simSerial.read());
     vTaskDelay(1);
   }
-  logLine("[SIM7680C] SMS done");
+
+  if (gotPrompt) {
+    simSerial.print(message);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    simSerial.write(26); // Ctrl+Z
+    logLine("[SIM7680C] Lệnh gửi SMS đã thực thi.");
+  } else {
+    simSerial.write(27); // ESC hủy lệnh
+    logLine("[SIM7680C] Lỗi: Không nhận được '>'");
+  }
 
   if (simMutex)
     xSemaphoreGive(simMutex);
 }
-
 void SIM7680C_sendSMS(const String &mapLink) {
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
@@ -493,84 +491,37 @@ void SIM7680C_sendSMS(const String &mapLink) {
 bool SIM7680C_callNumber(const char *number, int ringSeconds) {
   if (!number || strlen(number) < 3)
     return false;
-  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered()) {
-    logPrintf("[CALL] SIM capability=%s, skip %s",
-              SIM_capabilityName(SIM_getCapability()), number);
+
+  if (SMS_DRY_RUN) {
+    logPrintf("[CALL-LOG] >>> CHẾ ĐỘ CHẠY THỬ: Dự định gọi %s trong %ds",
+              number, ringSeconds);
     return false;
   }
+
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
-
-  if (sim_cancelRequested()) {
-    if (simMutex)
-      xSemaphoreGive(simMutex);
-    logLine("[CALL] Cancelled before dial");
-    return false;
-  }
-
-  logPrintf("[CALL] Dialing %s for %ds...", number, ringSeconds);
+  logPrintf("[CALL] Dialing %s...", number);
   simSerial.printf("ATD%s;\r\n", number);
 
   unsigned long t0 = millis();
-  unsigned long timeoutMs = (unsigned long)ringSeconds * 1000UL;
-  String res = "";
   bool answered = false;
+  String res = "";
 
-  while (millis() - t0 < timeoutMs) {
-    if (sim_cancelRequested()) {
-      logLine("[CALL] Cancel requested while ringing");
-      goto cleanup;
-    }
+  while (millis() - t0 < (unsigned long)ringSeconds * 1000UL) {
     while (simSerial.available()) {
       char c = simSerial.read();
       res += c;
-      Serial.write(c);
-
-      // Check call state indicators
       if (res.indexOf("VOICE CALL: BEGIN") >= 0) {
-        logLine("[CALL] ANSWERED!");
         answered = true;
-        // Wait for call to end
-        unsigned long callStart = millis();
-        while (millis() - callStart < 120000UL) { // max 2min
-          if (sim_cancelRequested()) {
-            logLine("[CALL] Cancel requested during active call");
-            goto cleanup;
-          }
-          while (simSerial.available()) {
-            char cc = simSerial.read();
-            res += cc;
-            Serial.write(cc);
-          }
-          if (res.indexOf("NO CARRIER") >= 0 ||
-              res.indexOf("VOICE CALL: END") >= 0) {
-            break;
-          }
-          vTaskDelay(pdMS_TO_TICKS(50));
-        }
-        goto cleanup;
-      }
-
-      // Call rejected / failed
-      if (res.indexOf("NO CARRIER") >= 0 || res.indexOf("BUSY") >= 0 ||
-          res.indexOf("NO ANSWER") >= 0 || res.indexOf("ERROR") >= 0 ||
-          res.indexOf("VOICE CALL: END") >= 0) {
-        logLine("[CALL] Not answered / rejected");
-        goto cleanup;
+        break;
       }
     }
+    if (answered || res.indexOf("NO CARRIER") >= 0)
+      break;
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 
-  logLine("[CALL] Ring timeout");
-
-cleanup:
   simSerial.println("ATH");
-  delay(500);
-  // Drain
-  while (simSerial.available())
-    simSerial.read();
-
   if (simMutex)
     xSemaphoreGive(simMutex);
   return answered;
@@ -676,7 +627,8 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
       ok = (statusCode >= 200 && statusCode < 300);
 
       int ci2 = actionResp.indexOf("\r\n", ci + 1);
-      if (ci2 == -1) ci2 = actionResp.length();
+      if (ci2 == -1)
+        ci2 = actionResp.length();
       dataLen = actionResp.substring(ci + 1, ci2).toInt();
     }
   } else {
@@ -891,9 +843,9 @@ bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour, int *minute,
 
   // Sanity check
   if (fullYear < 2024 || fullYear > 2035 || mo < 1 || mo > 12 || dd < 1 ||
-      dd > 31 || hh < 0 || hh > 23 || mn < 0 || mn > 59 || ss < 0 ||
-      ss > 59) {
-    logPrintf("[SIM] Rejecting implausible network time: %04d-%02d-%02d %02d:%02d:%02d",
+      dd > 31 || hh < 0 || hh > 23 || mn < 0 || mn > 59 || ss < 0 || ss > 59) {
+    logPrintf("[SIM] Rejecting implausible network time: %04d-%02d-%02d "
+              "%02d:%02d:%02d",
               fullYear, mo, dd, hh, mn, ss);
     return false;
   }

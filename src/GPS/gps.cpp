@@ -292,7 +292,8 @@ void GPS_injectApproxTime(int year, int month, int day, int hour, int minute,
     return;
   }
   if (month < 1 || month > 12 || day < 1 || day > 31) {
-    logPrintf("[GPS] Skip time inject: date=%d/%d/%d invalid", year, month, day);
+    logPrintf("[GPS] Skip time inject: date=%d/%d/%d invalid", year, month,
+              day);
     return;
   }
 
@@ -337,8 +338,9 @@ void GPS_injectApproxTime(int year, int month, int day, int hour, int minute,
   msg[31] = ckB;
 
   sendUBX(msg, 32);
-  logPrintf("[GPS] Injected approx time: %04d-%02d-%02d %02d:%02d:%02d acc=%ums",
-            year, month, day, hour, minute, second, accuracyMs);
+  logPrintf(
+      "[GPS] Injected approx time: %04d-%02d-%02d %02d:%02d:%02d acc=%ums",
+      year, month, day, hour, minute, second, accuracyMs);
 }
 
 // ============================================================
@@ -441,7 +443,8 @@ static bool tryInjectPositionFromNVS() {
   }
 
   if (usedHomeFallback) {
-    logLine("[GPS] HOME fallback injected; will still try better network aiding");
+    logLine(
+        "[GPS] HOME fallback injected; will still try better network aiding");
     return false;
   }
 
@@ -481,7 +484,8 @@ static void gpsAttemptRecovery(int transport) {
   const unsigned long elapsedMs = millis() - gpsAcqStartMs;
 
   if (gpsRecoveryStep == 0 && elapsedMs >= 90000UL) {
-    logLine("[GPS] No fix after 90s -> re-injecting time/position and hot reset");
+    logLine(
+        "[GPS] No fix after 90s -> re-injecting time/position and hot reset");
     tryInjectTimeFromSources();
     if (transport != 0)
       tryInjectPositionFromNetwork();
@@ -594,7 +598,8 @@ void gpsTask(void *pvParameters) {
               telem.assistReady ? 1 : 0);
   }
 
-  // 7) Configure GPS for acquisition first; switch to 5Hz only after a real fix.
+  // 7) Configure GPS for acquisition first; switch to 5Hz only after a real
+  // fix.
   logPrintf("[GPS] Configuring at %ld baud...", baud);
   applyGpsAcquisitionProfile();
   logLine("[GPS] Configuration DONE");
@@ -640,28 +645,50 @@ void gpsTask(void *pvParameters) {
 }
 
 // ---------------------- GET GPS LINK -----------------------
+
 String getGPSLink() {
-  char buffer[100];
-  BestLocationResult loc = getBestAvailableLocation();
-  if (loc.valid) {
-    sprintf(buffer, "https://www.google.com/maps?q=%.6f,%.6f", loc.lat,
-            loc.lng);
-    if (loc.source == LOC_GPS) {
-      GPS_LAT = loc.lat;
-      GPS_LNG = loc.lng;
+  char buffer[128];
+  TelemetrySnapshot telem = {};
+  getTelemetrySnapshot(&telem);
+
+  double finalLat = 0;
+  double finalLng = 0;
+  bool hasLocation = false;
+
+  // 1. Ưu tiên hàng đầu: Kiểm tra nếu GPS đã có vị trí mới (trong vòng 1 phút)
+  if (telem.gpsReady && (millis() - telem.lastGpsUpdateMs < 60000)) {
+    finalLat = GPS_getLatitude();
+    finalLng = GPS_getLongitude();
+    hasLocation = true;
+    logLine("[SOS] Sử dụng vị trí chính xác từ GPS");
+  }
+  // 2. Nếu GPS không có, thử lấy vị trí từ SIM (LBS) ngay lập tức
+  else {
+    logLine("[SOS] GPS chưa fix, đang quét vị trí từ trạm SIM (LBS)...");
+
+    // Gọi hàm quét LBS (đã sửa ở Bước 1)
+    if (acquireNetworkLocationNow()) {
+      // Lấy lại dữ liệu mới nhất sau khi quét thành công
+      getTelemetrySnapshot(&telem);
+      finalLat = telem.networkLocLat;
+      finalLng = telem.networkLocLng;
+      hasLocation = true;
+      logLine("[SOS] Sử dụng vị trí tương đối từ trạm SIM (LBS)");
     }
-  } else {
-    double lat = atof(GPS_LOCAL_LAT);
-    double lng = atof(GPS_LOCAL_LNG);
-    sprintf(buffer, "https://www.google.com/maps?q=%.6f,%.6f", lat, lng);
-    GPS_LAT = lat;
-    GPS_LNG = lng;
   }
 
-  if (loc.valid && loc.source == LOC_GPS) {
-    nvs_set_blob(nvsHandle, "GPS_LAT", &GPS_LAT, sizeof(GPS_LAT));
-    nvs_set_blob(nvsHandle, "GPS_LNG", &GPS_LNG, sizeof(GPS_LNG));
-    nvs_commit(nvsHandle);
+  // 3. Tạo link dựa trên kết quả
+  if (hasLocation) {
+    // SỬA LỖI: Thêm định dạng %.6f để truyền tọa độ vào chuỗi
+    snprintf(buffer, sizeof(buffer), "https://maps.google.com/?q=%.6f,%.6f",
+             finalLat, finalLng);
+  } else {
+    // Chỉ sử dụng config khi cả GPS và LBS đều thất bại hoàn toàn
+    logLine("[SOS] CẢNH BÁO: Không có vị trí mới, dùng vị trí mặc định");
+    snprintf(buffer, sizeof(buffer),
+             "https://maps.google.com/?q=%s,%s (Vị trí cũ)", GPS_LOCAL_LAT,
+             GPS_LOCAL_LNG);
   }
+
   return String(buffer);
 }
