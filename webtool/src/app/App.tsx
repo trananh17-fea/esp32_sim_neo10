@@ -70,6 +70,10 @@ export function App() {
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("saved");
   const [mapController, setMapController] = useState<TrackerMapController | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ name: string; lat: number; lng: number }>>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const copy = translations[locale];
   const onlineCount = devices.filter((device) => device.online).length;
@@ -182,6 +186,53 @@ export function App() {
     setPickMode("idle");
     setSidebarSection("home");
     setSidebarCollapsed(false);
+  };
+
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
+      );
+      const data = await response.json() as Array<{ lat: string; lon: string; display_name: string }>;
+
+      const results = data.map((item) => ({
+        name: item.display_name,
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+      }));
+
+      setSearchResults(results);
+      setShowSearchResults(true);
+    } catch (err) {
+      console.error("Search error:", err);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleSelectSearchResult = (lat: number, lng: number, name: string) => {
+    setSearchQuery(name);
+    setShowSearchResults(false);
+    setSearchResults([]);
+
+    // Pan map to selected location
+    if (mapController) {
+      mapController.focusOnCoordinates?.(lat, lng);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch(searchQuery);
+    }
   };
 
   const handleHomeSaved = (homeLat: number, homeLng: number, distanceToHomeM: number) => {
@@ -413,17 +464,83 @@ export function App() {
       <main className="gmaps-main">
         <div className="gmaps-topbar">
           <div className="gmaps-search-row">
-            <div className="gmaps-searchbox">
+            <div className="gmaps-searchbox" style={{ position: "relative" }}>
               <AppIcon name="search" size={18} />
               <input
                 className="gmaps-searchbox__input"
-                placeholder="Tìm kiếm trên Google Maps"
-                readOnly
-                value=""
+                placeholder="Tìm kiếm trên Maps"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
               />
-              <button className="gmaps-searchbox__action" type="button" aria-label="Directions">
+              <button
+                className="gmaps-searchbox__action"
+                type="button"
+                aria-label="Search"
+                onClick={() => handleSearch(searchQuery)}
+              >
                 <AppIcon name="directions" size={18} />
               </button>
+
+              {showSearchResults && searchResults.length > 0 && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  backgroundColor: "white",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                  maxHeight: "300px",
+                  overflowY: "auto",
+                  zIndex: 1000,
+                  marginTop: "4px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+                }}>
+                  {searchResults.map((result, index) => (
+                    <div
+                      key={index}
+                      onClick={() => handleSelectSearchResult(result.lat, result.lng, result.name)}
+                      style={{
+                        padding: "12px 16px",
+                        borderBottom: index < searchResults.length - 1 ? "1px solid #eee" : "none",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#f5f5f5";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }}
+                    >
+                      <div style={{ fontSize: "14px", fontWeight: "500" }}>{result.name}</div>
+                      <div style={{ fontSize: "12px", color: "#666" }}>
+                        {result.lat.toFixed(4)}, {result.lng.toFixed(4)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {searchLoading && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  backgroundColor: "white",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                  padding: "12px 16px",
+                  marginTop: "4px",
+                  textAlign: "center",
+                  fontSize: "14px",
+                  color: "#666"
+                }}>
+                  Tìm kiếm...
+                </div>
+              )}
             </div>
           </div>
 
@@ -494,7 +611,7 @@ export function App() {
             <div className="gmaps-layer-card__thumb" />
             <div className="gmaps-layer-card__info">
               <AppIcon name="layers" size={15} />
-              <span>Lớp</span>
+              <span>{mapLayer === "roadmap" ? "Vệ tinh" : "Lớp"}</span>
             </div>
           </button>
 
@@ -523,26 +640,12 @@ export function App() {
             >
               <AppIcon name="minus" size={18} />
             </button>
-            <button
-              className="gmaps-map-control gmaps-map-control--pegman"
-              type="button"
-              title="Street View"
-            >
-              <AppIcon name="pegman" size={18} />
-            </button>
-            <button className="gmaps-map-control" type="button" title="3D">
-              <AppIcon name="threeD" size={18} />
-            </button>
-            <button className="gmaps-map-control" type="button" title="Rotate">
-              <AppIcon name="rotate" size={18} />
-            </button>
           </div>
 
           <div className="gmaps-attribution">
-            <div className="gmaps-attribution__brand">Google</div>
+            <div className="gmaps-attribution__brand">Vũ Đăng Thanh x TA Solutions</div>
             <div className="gmaps-attribution__text">
-              <span>Hình ảnh ©2026, Dữ liệu bản đồ ©2026</span>
-              <span>Toàn cầu</span>
+              <span>Dữ liệu bản đồ ©2026</span>
               <span>Điều khoản</span>
               <span>Quyền riêng tư</span>
               <span>Gửi ý kiến phản hồi về sản phẩm</span>

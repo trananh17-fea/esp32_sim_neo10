@@ -21,6 +21,7 @@ export type TrackerMapController = {
   focusSelected: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  focusOnCoordinates?: (lat: number, lng: number) => void;
 };
 
 type TrackerMapProps = {
@@ -276,6 +277,9 @@ function MapControllerBridge({
       },
       zoomIn: () => map.zoomIn(),
       zoomOut: () => map.zoomOut(),
+      focusOnCoordinates: (lat: number, lng: number) => {
+        map.flyTo([lat, lng], 17, { duration: 0.5 });
+      },
     });
 
     return () => onControllerReady(null);

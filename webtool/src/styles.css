@@ -410,7 +410,6 @@ input {
   align-items: center;
   gap: 12px;
   width: min(100%, 422px);
-  min-height: 56px;
   padding: 0 16px;
   background: var(--bg-card);
   border-radius: 28px;
