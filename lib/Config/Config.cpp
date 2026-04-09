@@ -40,6 +40,10 @@ bool SIM_TRACKING_ENABLE = true;
 char WIFI_TRACKING_URL[CONFIG_TRACKING_URL_LEN] =
     "https://gps-tracker.ahcntab.workers.dev/update";
 char SIM_TRACKING_URL[CONFIG_TRACKING_URL_LEN] = "";
+unsigned long TRACKING_CURRENT_MOVING_INTERVAL_MS = 900000UL;
+unsigned long TRACKING_CURRENT_STATIONARY_INTERVAL_MS = 7200000UL;
+unsigned long TRACKING_HISTORY_MOVING_INTERVAL_MS = 7200000UL;
+unsigned long TRACKING_HISTORY_STATIONARY_INTERVAL_MS = 21600000UL;
 
 bool NETLOC_ENABLE = true;
 char NETLOC_API_KEY[CONFIG_NETLOC_KEY_LEN] =
@@ -54,10 +58,13 @@ char SIM_NETLOC_RELAY_URL[CONFIG_NETLOC_RELAY_LEN] = "";
 volatile uint8_t SIM_CAPABILITY_LEVEL = 0;
 volatile bool SOS_ACTIVE = false;
 volatile bool SOS_CANCEL_REQUESTED = false;
+volatile bool BATTERY_READY = false;
 volatile int SIGNAL_4G = 0;
 volatile int SIGNAL_WIFI = 0;
 volatile int SIGNAL_CSQ_RAW = 99;
 volatile int SIGNAL_RSSI_RAW = 0;
+volatile int BATTERY_PERCENT = -1;
+volatile float BATTERY_VOLTAGE_V = 0.0f;
 
 volatile unsigned long FIRST_FIX_MS = 0;
 volatile unsigned long LAST_GPS_UPDATE_MS = 0;
@@ -130,16 +137,17 @@ static float estimateGpsAccuracyM() {
   return acc;
 }
 
-static double distanceMeters(double latA, double lngA, double latB, double lngB) {
+static double distanceMeters(double latA, double lngA, double latB,
+                             double lngB) {
   if (!isValidCoordPair(latA, lngA) || !isValidCoordPair(latB, lngB))
     return -1.0;
   const double R = 6371000.0;
   const double toRad = PI / 180.0;
   const double dLat = (latB - latA) * toRad;
   const double dLng = (lngB - lngA) * toRad;
-  const double a = sin(dLat / 2.0) * sin(dLat / 2.0) +
-                   cos(latA * toRad) * cos(latB * toRad) *
-                       sin(dLng / 2.0) * sin(dLng / 2.0);
+  const double a =
+      sin(dLat / 2.0) * sin(dLat / 2.0) +
+      cos(latA * toRad) * cos(latB * toRad) * sin(dLng / 2.0) * sin(dLng / 2.0);
   return R * 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
 }
 
@@ -172,7 +180,8 @@ static bool passesJumpGate(double lat, double lng, float accuracyM,
   return jumpM <= allowedM;
 }
 
-static void rememberFusedLocation(const BestLocationResult &result, unsigned long nowMs) {
+static void rememberFusedLocation(const BestLocationResult &result,
+                                  unsigned long nowMs) {
   FUSED_READY = result.valid;
   if (!result.valid)
     return;
@@ -236,6 +245,12 @@ void getConfigSnapshot(ConfigSnapshot *out) {
   strncpy(out->simTrackingUrl, SIM_TRACKING_URL,
           sizeof(out->simTrackingUrl) - 1);
   out->simTrackingUrl[sizeof(out->simTrackingUrl) - 1] = '\0';
+  out->trackingCurrentMovingIntervalMs = TRACKING_CURRENT_MOVING_INTERVAL_MS;
+  out->trackingCurrentStationaryIntervalMs =
+      TRACKING_CURRENT_STATIONARY_INTERVAL_MS;
+  out->trackingHistoryMovingIntervalMs = TRACKING_HISTORY_MOVING_INTERVAL_MS;
+  out->trackingHistoryStationaryIntervalMs =
+      TRACKING_HISTORY_STATIONARY_INTERVAL_MS;
   out->netlocEnable = NETLOC_ENABLE;
   strncpy(out->netlocApiKey, NETLOC_API_KEY, sizeof(out->netlocApiKey) - 1);
   out->netlocApiKey[sizeof(out->netlocApiKey) - 1] = '\0';
@@ -291,6 +306,14 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
   strncpy(SIM_TRACKING_URL, snapshot->simTrackingUrl,
           sizeof(SIM_TRACKING_URL) - 1);
   SIM_TRACKING_URL[sizeof(SIM_TRACKING_URL) - 1] = '\0';
+  TRACKING_CURRENT_MOVING_INTERVAL_MS =
+      snapshot->trackingCurrentMovingIntervalMs;
+  TRACKING_CURRENT_STATIONARY_INTERVAL_MS =
+      snapshot->trackingCurrentStationaryIntervalMs;
+  TRACKING_HISTORY_MOVING_INTERVAL_MS =
+      snapshot->trackingHistoryMovingIntervalMs;
+  TRACKING_HISTORY_STATIONARY_INTERVAL_MS =
+      snapshot->trackingHistoryStationaryIntervalMs;
   NETLOC_ENABLE = snapshot->netlocEnable;
   strncpy(NETLOC_API_KEY, snapshot->netlocApiKey, sizeof(NETLOC_API_KEY) - 1);
   NETLOC_API_KEY[sizeof(NETLOC_API_KEY) - 1] = '\0';
@@ -324,10 +347,13 @@ void getTelemetrySnapshot(TelemetrySnapshot *out) {
   out->simCapabilityLevel = SIM_CAPABILITY_LEVEL;
   out->sosActive = SOS_ACTIVE;
   out->sosCancelRequested = SOS_CANCEL_REQUESTED;
+  out->batteryReady = BATTERY_READY;
   out->signal4G = SIGNAL_4G;
   out->signalWiFi = SIGNAL_WIFI;
   out->signalCsqRaw = SIGNAL_CSQ_RAW;
   out->signalRssiRaw = SIGNAL_RSSI_RAW;
+  out->batteryPercent = BATTERY_PERCENT;
+  out->batteryVoltageV = BATTERY_VOLTAGE_V;
   out->firstFixMs = FIRST_FIX_MS;
   out->lastGpsUpdateMs = LAST_GPS_UPDATE_MS;
   out->bootMs = BOOT_MS;
@@ -403,6 +429,14 @@ void telemetrySetSignalLevels(int signal4G, int signalWiFi, int signalCsqRaw,
   SIGNAL_WIFI = signalWiFi;
   SIGNAL_CSQ_RAW = signalCsqRaw;
   SIGNAL_RSSI_RAW = signalRssiRaw;
+  unlockTelemetry();
+}
+
+void telemetrySetBatteryStatus(bool ready, int percent, float voltageV) {
+  lockTelemetry();
+  BATTERY_READY = ready;
+  BATTERY_PERCENT = ready ? percent : -1;
+  BATTERY_VOLTAGE_V = ready ? voltageV : 0.0f;
   unlockTelemetry();
 }
 
@@ -569,7 +603,8 @@ BestLocationResult getBestAvailableLocation() {
     netCandidate.ageMs = now - telem.networkLocAtMs;
     netCandidate.valid =
         netCandidate.ageMs < 300000UL &&
-        isTrustedNetworkCandidate(netCandidate.source, netCandidate.accuracyM) &&
+        isTrustedNetworkCandidate(netCandidate.source,
+                                  netCandidate.accuracyM) &&
         passesJumpGate(netCandidate.lat, netCandidate.lng,
                        netCandidate.accuracyM, netCandidate.source, now);
   }

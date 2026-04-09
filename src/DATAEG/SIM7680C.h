@@ -64,6 +64,7 @@ bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio);
 bool sim_isRegistered();
 int sim_readCSQ();        // raw CSQ value (0-31, 99=unknown)
 int sim_getSignalLevel(); // mapped to 0..10
+bool SIM_getBatteryStatus(int *percent, float *voltageV);
 
 // --- Helpers ---
 String sim_readResponse(uint32_t timeoutMs);

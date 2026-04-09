@@ -92,6 +92,22 @@ static int getSignalLevel() {
   return levelWiFi;
 }
 
+static void refreshBatteryTelemetry() {
+  if (!SIM_hasCapability(SIM_CAP_RADIO_OK)) {
+    telemetrySetBatteryStatus(false, -1, 0.0f);
+    return;
+  }
+
+  int batteryPercent = -1;
+  float batteryVoltageV = 0.0f;
+  if (SIM_getBatteryStatus(&batteryPercent, &batteryVoltageV)) {
+    telemetrySetBatteryStatus(true, batteryPercent, batteryVoltageV);
+    return;
+  }
+
+  telemetrySetBatteryStatus(false, -1, 0.0f);
+}
+
 // ============================================================
 // Send warning — SMS always, optional call per SIGNAL_WARN_CALL_MODE
 //   0 = SMS only (default)
@@ -150,6 +166,7 @@ void signalMonitorTask(void *pvParameters) {
   while (true) {
     // *** ALWAYS update signal levels (this was the critical bug) ***
     int level = getSignalLevel();
+    refreshBatteryTelemetry();
 
     // --- Warning logic: only runs if enabled ---
     ConfigSnapshot cfg = {};

@@ -119,5 +119,5 @@ void setup() {
 void loop() {
   Tracking_Loop();
   loopFriendlyNamePortal();
-  vTaskDelay(pdMS_TO_TICKS(250));
+  vTaskDelay(50);
 }

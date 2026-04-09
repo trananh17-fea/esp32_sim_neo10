@@ -1,25 +1,21 @@
 #include "tracking.h"
+#include "ConnectionManager.h"
 #include "Config.h"
 #include "DATAEG/SIM7680C.h"
 #include "GPS/gps.h"
 #include "geofencing/geofencing.h"
-#include <HTTPClient.h>
+#include "network_location/location.h"
+#include <ArduinoJson.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 
 static constexpr const char *DEFAULT_TRACKING_URL =
     "https://gps-tracker.ahcntab.workers.dev/update";
 static constexpr const char *DEFAULT_TRACKING_GET_URL =
     "https://gps-tracker.ahcntab.workers.dev/update_get";
 
-// Low-power default profile for 2000mAh LiPo deployments.
-static constexpr unsigned long CURRENT_MOVING_INTERVAL_MS = 900000UL;
-static constexpr unsigned long CURRENT_STATIONARY_INTERVAL_MS = 7200000UL;
 static constexpr unsigned long CURRENT_DISTANCE_MIN_GAP_MS = 900000UL;
 static constexpr double CURRENT_DISTANCE_DELTA_M = 500.0;
 
-static constexpr unsigned long HISTORY_MOVING_INTERVAL_MS = 7200000UL;
-static constexpr unsigned long HISTORY_STATIONARY_INTERVAL_MS = 21600000UL;
 static constexpr unsigned long HISTORY_DISTANCE_MIN_GAP_MS = 3600000UL;
 static constexpr double HISTORY_DISTANCE_DELTA_M = 1500.0;
 static constexpr unsigned long TRACK_SEND_RETRY_BACKOFF_MS = 60000UL;
@@ -35,6 +31,9 @@ static LocationSource lastCurrentSource = LOC_NONE;
 static LocationSource lastHistorySource = LOC_NONE;
 static bool hasCurrentSnapshot = false;
 static bool hasHistorySnapshot = false;
+static unsigned long lastTrackingNetlocAttemptMs = 0;
+static ConnectionManager connectionManager;
+static constexpr unsigned long TRACK_NETLOC_RETRY_MS = 60000UL;
 
 void Tracking_Init() { logLine("[TRACK] Init"); }
 
@@ -64,7 +63,8 @@ static bool isMovingNow(const BestLocationResult &loc, float speedKmph) {
 }
 
 static bool shouldSendCurrentSnapshot(const BestLocationResult &loc,
-                                      float speedKmph, unsigned long nowMs) {
+                                      float speedKmph, unsigned long nowMs,
+                                      const ConfigSnapshot &cfg) {
   if (!hasCurrentSnapshot)
     return true;
 
@@ -79,13 +79,14 @@ static bool shouldSendCurrentSnapshot(const BestLocationResult &loc,
   }
 
   const unsigned long intervalMs =
-      isMovingNow(loc, speedKmph) ? CURRENT_MOVING_INTERVAL_MS
-                                  : CURRENT_STATIONARY_INTERVAL_MS;
+      isMovingNow(loc, speedKmph) ? cfg.trackingCurrentMovingIntervalMs
+                                  : cfg.trackingCurrentStationaryIntervalMs;
   return (nowMs - lastCurrentSendMS) >= intervalMs;
 }
 
 static bool shouldWriteHistorySample(const BestLocationResult &loc,
-                                     float speedKmph, unsigned long nowMs) {
+                                     float speedKmph, unsigned long nowMs,
+                                     const ConfigSnapshot &cfg) {
   if (!hasHistorySnapshot)
     return true;
 
@@ -102,9 +103,26 @@ static bool shouldWriteHistorySample(const BestLocationResult &loc,
   }
 
   const unsigned long intervalMs =
-      isMovingNow(loc, speedKmph) ? HISTORY_MOVING_INTERVAL_MS
-                                  : HISTORY_STATIONARY_INTERVAL_MS;
+      isMovingNow(loc, speedKmph) ? cfg.trackingHistoryMovingIntervalMs
+                                  : cfg.trackingHistoryStationaryIntervalMs;
   return (nowMs - lastHistorySendMS) >= intervalMs;
+}
+
+static bool shouldForceSendFreshNetworkLocation(const BestLocationResult &loc) {
+  if (!loc.valid)
+    return false;
+  if (loc.source != LOC_CELL_GEO && loc.source != LOC_WIFI_GEO)
+    return false;
+  if (loc.ageMs > 15000UL)
+    return false;
+  if (!hasCurrentSnapshot)
+    return true;
+  if (lastCurrentSource == LOC_HOME || lastCurrentSource == LOC_NONE)
+    return true;
+
+  const double movedM =
+      distanceBetweenMeters(loc.lat, loc.lng, lastCurrentLat, lastCurrentLng);
+  return movedM >= 200.0;
 }
 
 static void rememberCurrentSnapshot(const BestLocationResult &loc,
@@ -123,17 +141,6 @@ static void rememberHistorySnapshot(const BestLocationResult &loc,
   lastHistoryLng = loc.lng;
   lastHistorySource = loc.source;
   hasHistorySnapshot = true;
-}
-
-static void appendJsonString(String &json, const String &value) {
-  json += '"';
-  for (size_t i = 0; i < value.length(); ++i) {
-    const char ch = value[i];
-    if (ch == '"' || ch == '\\')
-      json += '\\';
-    json += ch;
-  }
-  json += '"';
 }
 
 static String urlEncodeTrack(const String &input) {
@@ -156,8 +163,8 @@ static String urlEncodeTrack(const String &input) {
   return out;
 }
 
-static void appendGeoFields(String &json, double currentLat, double currentLng,
-                            const ConfigSnapshot &cfg) {
+static void appendGeoFields(JsonDocument &doc, double currentLat,
+                            double currentLng, const ConfigSnapshot &cfg) {
   bool homeSet = isValidCoordPair(cfg.homeLat, cfg.homeLng);
   bool currentValid = isValidCoordPair(currentLat, currentLng);
   double distanceToHomeM = -1.0;
@@ -173,83 +180,76 @@ static void appendGeoFields(String &json, double currentLat, double currentLng,
       homeSet && cfg.geofenceEnable && (distanceToHomeM >= 0.0) &&
       (distanceToHomeM <= static_cast<double>(cfg.geofenceRadiusM));
 
-  json += ",\"homeSet\":";
-  json += homeSet ? "true" : "false";
+  doc["homeSet"] = homeSet;
 
   if (homeSet) {
-    json += ",\"homeLat\":";
-    json += String(cfg.homeLat, 6);
-    json += ",\"homeLng\":";
-    json += String(cfg.homeLng, 6);
+    doc["homeLat"] = cfg.homeLat;
+    doc["homeLng"] = cfg.homeLng;
   }
 
-  json += ",\"geoEnabled\":";
-  json += cfg.geofenceEnable ? "true" : "false";
-  json += ",\"geoRadiusM\":";
-  json += String(cfg.geofenceRadiusM);
-  json += ",\"distanceToHomeM\":";
-  if (distanceToHomeM >= 0.0)
-    json += String(distanceToHomeM, 1);
-  else
-    json += "-1";
-  json += ",\"insideGeofence\":";
-  json += insideGeofence ? "true" : "false";
+  doc["geoEnabled"] = cfg.geofenceEnable;
+  doc["geoRadiusM"] = cfg.geofenceRadiusM;
+  doc["distanceToHomeM"] = (distanceToHomeM >= 0.0) ? distanceToHomeM : -1;
+  doc["insideGeofence"] = insideGeofence;
 
   logPrintf("[TRACK] geo en=%d home=%d rad=%d dist=%.1f in=%d",
             cfg.geofenceEnable ? 1 : 0, homeSet ? 1 : 0, cfg.geofenceRadiusM,
             distanceToHomeM, insideGeofence ? 1 : 0);
 }
 
-static String buildTrackingPayload(double lat, double lng, bool isTest,
-                                   const ConfigSnapshot &cfg,
-                                   const BestLocationResult &loc,
-                                   bool historySample) {
+static void buildTrackingJson(JsonDocument &doc, bool isTest,
+                              const ConfigSnapshot &cfg,
+                              const BestLocationResult &loc,
+                              bool historySample) {
+  TelemetrySnapshot telem = {};
+  getTelemetrySnapshot(&telem);
   int satellites = gps.satellites.isValid() ? gps.satellites.value() : 0;
   float speedKmph = gps.speed.isValid() ? gps.speed.kmph() : 0.0f;
 
-  String json = "{\"id\":";
-  appendJsonString(json, String(cfg.deviceId));
-  json += ",\"deviceId\":";
-  appendJsonString(json, String(cfg.deviceId));
-  json += ",\"deviceName\":";
-  appendJsonString(json, String(cfg.deviceName));
-  json += ",\"lat\":";
-  json += String(lat, 6);
-  json += ",\"lng\":";
-  json += String(lng, 6);
-
-  json += ",\"locSource\":";
-  appendJsonString(json, String(locationSourceName(loc.source)));
-  json += ",\"locAccuracyM\":";
-  json += String(loc.accuracyM, 1);
-  json += ",\"locAgeMs\":";
-  json += String(loc.ageMs);
-  json += ",\"satellites\":";
-  json += String(satellites);
-  json += ",\"speedKmph\":";
-  json += String(speedKmph, 1);
-  json += ",\"historySample\":";
-  json += historySample ? "true" : "false";
-
-  appendGeoFields(json, lat, lng, cfg);
-
+  doc["id"] = cfg.deviceId;
+  doc["deviceId"] = cfg.deviceId;
+  doc["name"] = cfg.deviceName;
+  doc["deviceName"] = cfg.deviceName;
+  doc["lat"] = loc.lat;
+  doc["lng"] = loc.lng;
+  doc["lon"] = loc.lng;
+  doc["timestamp"] = static_cast<uint32_t>(millis());
+  doc["locSource"] = locationSourceName(loc.source);
+  doc["source"] = locationSourceName(loc.source);
+  doc["locAccuracyM"] = loc.accuracyM;
+  doc["accuracy"] = loc.accuracyM;
+  doc["locAgeMs"] = loc.ageMs;
+  doc["satellites"] = satellites;
+  doc["speedKmph"] = speedKmph;
+  doc["historySample"] = historySample;
+  doc["fix"] = (loc.source == LOC_GPS);
+  if (telem.batteryReady) {
+    doc["batteryPercent"] = telem.batteryPercent;
+    doc["batteryVoltageV"] = telem.batteryVoltageV;
+  }
+  appendGeoFields(doc, loc.lat, loc.lng, cfg);
   if (isTest)
-    json += ",\"test\":true";
+    doc["test"] = true;
+}
 
-  json += "}";
-  return json;
+static String serializeTrackingPayload(bool isTest, const ConfigSnapshot &cfg,
+                                       const BestLocationResult &loc,
+                                       bool historySample) {
+  JsonDocument doc;
+  buildTrackingJson(doc, isTest, cfg, loc, historySample);
+  String payload;
+  serializeJson(doc, payload);
+  return payload;
 }
 
 static String buildTrackingFallbackGetUrl(const ConfigSnapshot &cfg,
-                                          const BestLocationResult &loc,
-                                          bool historySample) {
-  if (strlen(cfg.simTrackingUrl) < 8)
+                                          const String &payload) {
+  JsonDocument doc;
+  if (deserializeJson(doc, payload) != DeserializationError::Ok)
     return "";
 
-  int satellites = gps.satellites.isValid() ? gps.satellites.value() : 0;
-  float speedKmph = gps.speed.isValid() ? gps.speed.kmph() : 0.0f;
-
-  String url = String(cfg.simTrackingUrl);
+  String url = strlen(cfg.simTrackingUrl) >= 8 ? String(cfg.simTrackingUrl)
+                                               : String(DEFAULT_TRACKING_URL);
   int queryCut = url.indexOf('?');
   if (queryCut >= 0)
     url = url.substring(0, queryCut);
@@ -259,99 +259,38 @@ static String buildTrackingFallbackGetUrl(const ConfigSnapshot &cfg,
   else
     url = DEFAULT_TRACKING_GET_URL;
   url += "?deviceId=";
-  url += urlEncodeTrack(String(cfg.deviceId));
+  url += urlEncodeTrack(String(static_cast<const char *>(doc["deviceId"])));
   url += "&deviceName=";
-  url += urlEncodeTrack(String(cfg.deviceName));
+  url += urlEncodeTrack(String(static_cast<const char *>(doc["deviceName"])));
   url += "&lat=";
-  url += String(loc.lat, 6);
+  url += String(doc["lat"].as<double>(), 6);
   url += "&lng=";
-  url += String(loc.lng, 6);
+  url += String(doc["lng"].as<double>(), 6);
   url += "&locSource=";
-  url += urlEncodeTrack(String(locationSourceName(loc.source)));
+  url += urlEncodeTrack(String(static_cast<const char *>(doc["locSource"])));
   url += "&locAccuracyM=";
-  url += String(loc.accuracyM, 1);
+  url += String(doc["locAccuracyM"].as<float>(), 1);
   url += "&locAgeMs=";
-  url += String(loc.ageMs);
+  url += String(doc["locAgeMs"].as<unsigned long>());
   url += "&satellites=";
-  url += String(satellites);
+  url += String(doc["satellites"].as<int>());
   url += "&speedKmph=";
-  url += String(speedKmph, 1);
+  url += String(doc["speedKmph"].as<float>(), 1);
   url += "&historySample=";
-  url += historySample ? "1" : "0";
+  url += doc["historySample"].as<bool>() ? "1" : "0";
+  if (!doc["batteryPercent"].isNull()) {
+    url += "&batteryPercent=";
+    url += String(doc["batteryPercent"].as<int>());
+  }
+  if (!doc["batteryVoltageV"].isNull()) {
+    url += "&batteryVoltageV=";
+    url += String(doc["batteryVoltageV"].as<float>(), 3);
+  }
   return url;
 }
 
-// ============================================================
-// Send via WiFi
-// ============================================================
-static bool sendViaWiFi(const String &json) {
-  if (WiFi.status() != WL_CONNECTED)
-    return false;
-
-  ConfigSnapshot cfg = {};
-  getConfigSnapshot(&cfg);
-  const char *wifiUrl =
-      strlen(cfg.wifiTrackingUrl) >= 8 ? cfg.wifiTrackingUrl : DEFAULT_TRACKING_URL;
-
-  HTTPClient http;
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  if (!http.begin(client, wifiUrl)) {
-    logLine("[TRACK] WiFi HTTP begin fail");
-    telemetrySetTrackWifiCode(-1);
-    return false;
-  }
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(8000);
-
-  int code = http.POST(json);
-  telemetrySetTrackWifiCode(code);
-
-  if (code >= 200 && code < 300) {
-    logPrintf("[TRACK] WiFi OK (%d)", code);
-  } else {
-    logPrintf("[TRACK] WiFi fail: %d %s", code,
-              http.errorToString(code).c_str());
-  }
-  http.end();
-  return (code >= 200 && code < 300);
-}
-
-// ============================================================
-// Send via SIM (4G)
-// HTTP 715 = SIM7680C SSL handshake failure with Cloudflare
-// Disable with SIM_TRACKING_ENABLE=false while debugging
-// ============================================================
-static bool sendViaSIM(const String &json) {
-  ConfigSnapshot cfg = {};
-  getConfigSnapshot(&cfg);
-  if (!SIM_hasCapability(SIM_CAP_DATA_OK) || !cfg.simTrackingEnable)
-    return false;
-  if (telemetryIsSosActive())
-    return false;
-  if (strlen(cfg.simTrackingUrl) < 8) {
-    logLine("[TRACK] SIM tracking URL not configured, skip");
-    return false;
-  }
-  const char *simUrl = cfg.simTrackingUrl;
-  if (SIM7680C_isTlsHostBlocked(simUrl)) {
-    logPrintf("[TRACK] SIM TLS blocked for host=%s", simUrl);
-    telemetrySetTrackSimCode(715);
-    return false;
-  }
-
-  logLine("[TRACK] SIM POST...");
-  if (!SIM7680C_httpPost(simUrl, "application/json", json)) {
-    TelemetrySnapshot telem = {};
-    getTelemetrySnapshot(&telem);
-    logPrintf("[TRACK] SIM fail: %d capability=%s", telem.trackSimCode,
-              SIM_capabilityName(SIM_getCapability()));
-    return false;
-  }
-  // Note: SIM7680C_httpPost doesn't return a code cleanly,
-  // but it logs the status internally
-  return true;
+static bool canAttemptTrackingNetloc() {
+  return WiFi.status() == WL_CONNECTED || SIM_hasCapability(SIM_CAP_VOICE_SMS_OK);
 }
 
 // ============================================================
@@ -359,9 +298,23 @@ void Tracking_Loop() {
   if (telemetryIsSosActive())
     return;
 
+  const unsigned long nowMs = millis();
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
   BestLocationResult loc = getBestAvailableLocation();
+
+  if ((!loc.valid || loc.source == LOC_HOME) && cfg.netlocEnable &&
+      canAttemptTrackingNetloc() &&
+      (lastTrackingNetlocAttemptMs == 0 ||
+       (nowMs - lastTrackingNetlocAttemptMs) >= TRACK_NETLOC_RETRY_MS)) {
+    lastTrackingNetlocAttemptMs = nowMs;
+    if (acquireNetworkLocationNow()) {
+      BestLocationResult refreshed = getBestAvailableLocation();
+      if (refreshed.valid)
+        loc = refreshed;
+    }
+  }
+
   if (!loc.valid)
     return;
 
@@ -370,46 +323,34 @@ void Tracking_Loop() {
   if (loc.source == LOC_HOME)
     return;
 
-  const unsigned long nowMs = millis();
   if (lastFailedSendMs > 0 &&
       (nowMs - lastFailedSendMs) < TRACK_SEND_RETRY_BACKOFF_MS) {
     return;
   }
 
   const float speedKmph = readCurrentSpeedKmph();
-  const bool sendCurrent = shouldSendCurrentSnapshot(loc, speedKmph, nowMs);
-  const bool writeHistory = shouldWriteHistorySample(loc, speedKmph, nowMs);
+  const bool forceFreshNetloc = shouldForceSendFreshNetworkLocation(loc);
+  const bool sendCurrent =
+      forceFreshNetloc || shouldSendCurrentSnapshot(loc, speedKmph, nowMs, cfg);
+  const bool writeHistory =
+      shouldWriteHistorySample(loc, speedKmph, nowMs, cfg);
 
   if (!sendCurrent && !writeHistory)
     return;
 
-  String json =
-      buildTrackingPayload(loc.lat, loc.lng, false, cfg, loc, writeHistory);
-
-  bool wifiOK = sendViaWiFi(json);
-  if (!wifiOK) {
-    wifiOK = sendViaSIM(json);
-    if (!wifiOK) {
-      String fallbackUrl =
-          buildTrackingFallbackGetUrl(cfg, loc, writeHistory);
-      if (fallbackUrl.length() > 0) {
-        logPrintf("[TRACK] SIM GET fallback urlLen=%d", fallbackUrl.length());
-        String response;
-        if (SIM7680C_httpGetWithResponse(fallbackUrl, response)) {
-          logPrintf("[TRACK] SIM GET fallback OK body=%s", response.c_str());
-          wifiOK = true;
-        } else if (response.length() > 0) {
-          logPrintf("[TRACK] SIM GET fallback body=%s", response.c_str());
-        } else {
-          logLine("[TRACK] SIM GET fallback failed");
-        }
-      } else {
-        logLine("[TRACK] SIM GET fallback disabled: no SIM URL");
-      }
-    }
+  logPrintf("[TRACK] sending src=%s lat=%.6f lng=%.6f acc=%.1f age=%lu hist=%d",
+            locationSourceName(loc.source), loc.lat, loc.lng, loc.accuracyM,
+            loc.ageMs, writeHistory ? 1 : 0);
+  if (forceFreshNetloc) {
+    logLine("[TRACK] forcing immediate send for fresh network location");
   }
 
-  if (wifiOK) {
+  const String payload = serializeTrackingPayload(false, cfg, loc, writeHistory);
+  const String fallbackUrl = buildTrackingFallbackGetUrl(cfg, payload);
+  bool sendOK =
+      connectionManager.sendTrackingPayload(payload, cfg, fallbackUrl);
+
+  if (sendOK) {
     lastFailedSendMs = 0;
     rememberCurrentSnapshot(loc, nowMs);
     if (writeHistory)
@@ -423,43 +364,27 @@ void Tracking_Loop() {
 // One-shot test (for /track_test hidden endpoint)
 // ============================================================
 String trackingTestRequest() {
-  if (WiFi.status() != WL_CONNECTED)
-    return "{\"error\":\"WiFi not connected\"}";
-
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
   BestLocationResult loc = getBestAvailableLocation();
   if (!loc.valid)
     return "{\"error\":\"No location available\"}";
 
-  String json = buildTrackingPayload(loc.lat, loc.lng, true, cfg, loc, true);
+  String json = serializeTrackingPayload(true, cfg, loc, true);
+  bool ok = connectionManager.sendTrackingPayload(
+      json, cfg, buildTrackingFallbackGetUrl(cfg, json));
+  TelemetrySnapshot telem = {};
+  getTelemetrySnapshot(&telem);
 
-  HTTPClient http;
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  const char *wifiUrl =
-      strlen(cfg.wifiTrackingUrl) >= 8 ? cfg.wifiTrackingUrl : DEFAULT_TRACKING_URL;
-
-  if (!http.begin(client, wifiUrl))
-    return "{\"error\":\"HTTP begin failed\"}";
-
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(10000);
-
-  int code = http.POST(json);
   String payloadEcho = json;
   payloadEcho.replace("\"", "'");
-  String result =
-      "{\"http_code\":" + String(code) + ",\"payload\":\"" + payloadEcho + "\"";
-  if (code > 0) {
-    String body = http.getString();
-    body.replace("\"", "'");
-    result += ",\"body\":\"" + body + "\"";
-  } else {
-    result += ",\"error\":\"" + http.errorToString(code) + "\"";
-  }
+  String result = "{\"ok\":";
+  result += ok ? "true" : "false";
+  result += ",\"wifi_code\":";
+  result += String(telem.trackWifiCode);
+  result += ",\"sim_code\":";
+  result += String(telem.trackSimCode);
+  result += ",\"payload\":\"" + payloadEcho + "\"";
   result += "}";
-  http.end();
   return result;
 }

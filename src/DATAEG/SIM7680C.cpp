@@ -170,6 +170,17 @@ static bool sim_detectDataSession() {
   return dataReady;
 }
 
+static int sim_voltageToBatteryPercent(float voltageV) {
+  const float kMinV = 3.30f;
+  const float kMaxV = 3.80f;
+  if (voltageV <= kMinV)
+    return 0;
+  if (voltageV >= kMaxV)
+    return 100;
+  const float ratio = (voltageV - kMinV) / (kMaxV - kMinV);
+  return static_cast<int>((ratio * 100.0f) + 0.5f);
+}
+
 // ============================================================
 // Helper: read modem response with timeout
 // ============================================================
@@ -216,6 +227,15 @@ void init_sim7680c() {
     return;
   }
   SIM_setCapability(SIM_CAP_RADIO_OK);
+
+  // Đồng bộ thời gian
+  logLine("[SIM] Đang ép đồng bộ thời gian qua NTP...");
+  simSerial.println("AT+CNTP=\"pool.ntp.org\",28"); // 28 là múi giờ +7 (7*4)
+  delay(200);
+  simSerial.println("AT+CNTP");
+  delay(1000); // Chờ module xử lý
+  String ntpResp = sim_readResponse(5000);
+  logPrintf("[SIM] NTP Response: %s", ntpResp.c_str());
 
   // PDP context (Viettel)
   simSerial.println("AT+CGATT=1");
@@ -343,6 +363,48 @@ int sim_getSignalLevel() {
   if (csq <= 24)
     return 8 + (csq - 20) / 3; // 8-9
   return 10;
+}
+
+bool SIM_getBatteryStatus(int *percent, float *voltageV) {
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+
+  simSerial.println("AT+CBC");
+  String r = sim_readResponse(700);
+
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  int idx = r.indexOf("+CBC: ");
+  if (idx < 0)
+    return false;
+
+  int c1 = r.indexOf(',', idx + 6);
+  int c2 = (c1 >= 0) ? r.indexOf(',', c1 + 1) : -1;
+  if (c1 < 0 || c2 < 0)
+    return false;
+
+  const int rawPercent = r.substring(c1 + 1, c2).toInt();
+  int end = r.indexOf("\r", c2 + 1);
+  if (end < 0)
+    end = r.indexOf("\n", c2 + 1);
+  if (end < 0)
+    end = r.length();
+  const int millivolts = r.substring(c2 + 1, end).toInt();
+  if (millivolts < 3000 || millivolts > 5000)
+    return false;
+
+  const float parsedVoltageV = millivolts / 1000.0f;
+  const int inferredPercent = sim_voltageToBatteryPercent(parsedVoltageV);
+
+  if (percent)
+    *percent = inferredPercent;
+  if (voltageV)
+    *voltageV = parsedVoltageV;
+
+  logPrintf("[SIM] Battery raw=%d%% inferred=%d%% %.3fV", rawPercent,
+            inferredPercent, parsedVoltageV);
+  return true;
 }
 
 // ============================================================
@@ -842,11 +904,10 @@ bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour, int *minute,
   // but the time accuracy (2s) makes this acceptable
 
   // Sanity check
-  if (fullYear < 2024 || fullYear > 2035 || mo < 1 || mo > 12 || dd < 1 ||
-      dd > 31 || hh < 0 || hh > 23 || mn < 0 || mn > 59 || ss < 0 || ss > 59) {
-    logPrintf("[SIM] Rejecting implausible network time: %04d-%02d-%02d "
-              "%02d:%02d:%02d",
-              fullYear, mo, dd, hh, mn, ss);
+  if (fullYear < 2024 || fullYear > 2035) {
+    logPrintf(
+        "[SIM] Warning: Implausible year %d, but trying to sync anyway...",
+        fullYear);
     return false;
   }
 

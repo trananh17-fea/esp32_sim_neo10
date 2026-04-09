@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react";
 import type { AppCopy } from "../../i18n";
 import type { TrackerDeviceSummary } from "../../types/tracker";
+import { AppIcon } from "../../components/AppIcon";
 
 type DeviceDetailsProps = {
   copy: AppCopy;
   device: TrackerDeviceSummary | null;
   loading: boolean;
-  onRename: (deviceId: string, deviceName: string) => Promise<void>;
   onFetchCurrentLocation: (deviceId: string) => Promise<void>;
+  onRename: (deviceId: string, deviceName: string) => Promise<void>;
 };
 
 function formatCoordinate(value?: number) {
-  return typeof value === "number" ? value.toFixed(6) : "—";
+  return typeof value === "number" ? value.toFixed(6) : "--";
 }
 
 function formatDistance(value?: number) {
-  if (typeof value !== "number" || value < 0) return "—";
-  if (value > 1000) return `${(value / 1000).toFixed(2)} km`;
+  if (typeof value !== "number" || value < 0) return "--";
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} km`;
   return `${Math.round(value)} m`;
 }
 
@@ -24,122 +25,108 @@ export function DeviceDetails({
   copy,
   device,
   loading,
-  onRename,
   onFetchCurrentLocation,
+  onRename,
 }: DeviceDetailsProps) {
   const [draftName, setDraftName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [fetchingLocation, setFetchingLocation] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     setDraftName(device?.deviceName ?? "");
   }, [device?.deviceId, device?.deviceName]);
 
   if (loading) {
-    return (
-      <section className="panel muted">
-        <span>{copy.loadingDevices}</span>
-      </section>
-    );
+    return <div className="place-sheet__empty">{copy.loadingDevices}</div>;
   }
 
   if (!device) {
-    return (
-      <section className="panel muted">
-        <span>{copy.chooseDevice}</span>
-      </section>
-    );
+    return <div className="place-sheet__empty">{copy.chooseDevice}</div>;
   }
 
   return (
-    <section className="panel">
-      {/* Header */}
-      <div className="panel__header">
-        <div>
-          <p className="panel__eyebrow">{copy.selectedDevice}</p>
-          <h3 className="panel__title">{device.deviceName}</h3>
+    <div className="place-pane">
+      <div className="place-summary-card">
+        <div className="place-summary-card__main">
+          <p className="place-summary-card__label">{copy.selectedDevice}</p>
+          <strong className="place-summary-card__value">{device.deviceId}</strong>
         </div>
-        <span className={device.online ? "status-chip is-online" : "status-chip is-offline"}>
-          {device.online ? copy.onlineNow : copy.offline}
+        <span className={`maps-status-pill ${device.online ? "is-online" : "is-offline"}`}>
+          <span className="maps-status-pill__dot" />
         </span>
       </div>
 
-      {/* Rename */}
-      <div className="rename-row">
-        <input
-          className="text-input"
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          placeholder={copy.renamePlaceholder}
-        />
+      <div className="place-action-row">
         <button
-          className="action-button"
-          disabled={saving || !draftName.trim() || draftName.trim() === device.deviceName}
+          className="maps-action-button maps-action-button--primary"
+          disabled={refreshing}
           onClick={async () => {
-            setSaving(true);
-            try { await onRename(device.deviceId, draftName); }
-            finally { setSaving(false); }
+            setRefreshing(true);
+            try {
+              await onFetchCurrentLocation(device.deviceId);
+            } finally {
+              setRefreshing(false);
+            }
           }}
           type="button"
         >
-          {saving ? copy.saving : copy.save}
+          <AppIcon name="refresh" size={16} />
+          <span style={{ fontSize: 14 }}>{refreshing ? copy.fetchingLocation : copy.fetchCurrentLocation}</span>
         </button>
       </div>
 
-      <div className="rename-row">
-        <button
-          className="action-button"
-          disabled={fetchingLocation}
-          onClick={async () => {
-            setFetchingLocation(true);
-            try { await onFetchCurrentLocation(device.deviceId); }
-            finally { setFetchingLocation(false); }
-          }}
-          type="button"
-        >
-          {fetchingLocation ? copy.fetchingLocation : copy.fetchCurrentLocation}
-        </button>
-      </div>
+      <label className="maps-field">
+        <span>{copy.renamePlaceholder}</span>
+        <div className="maps-rename-row">
+          <input
+            className="maps-text-input"
+            onChange={(event) => setDraftName(event.target.value)}
+            placeholder={copy.renamePlaceholder}
+            value={draftName}
+          />
+          <button
+            className="maps-action-button"
+            disabled={saving || !draftName.trim() || draftName.trim() === device.deviceName}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onRename(device.deviceId, draftName.trim());
+              } finally {
+                setSaving(false);
+              }
+            }}
+            type="button"
+          >
+            <AppIcon name="edit" size={16} />
+            <span>{saving ? copy.saving : copy.save}</span>
+          </button>
+        </div>
+      </label>
 
-      {/* Stats grid */}
-      <div className="detail-grid">
-        <div className="detail-cell">
-          <span className="detail-label">{copy.latitude}</span>
+      <div className="place-detail-grid">
+        <div className="place-detail-row">
+          <span className="place-metric__label">
+            <AppIcon name="accuracy" size={15} />
+            {copy.accuracy}
+          </span>
+          <strong>{formatDistance(device.locAccuracyM)}</strong>
+        </div>
+        <div className="place-detail-row">
+          <span style={{ fontSize: '14px' }}>{copy.latitude}</span>
           <strong>{formatCoordinate(device.lat)}</strong>
         </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.longitude}</span>
+        <div className="place-detail-row">
+          <span style={{ fontSize: '14px' }}  >{copy.longitude}</span>
           <strong>{formatCoordinate(device.lng)}</strong>
         </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.satellites}</span>
-          <strong>{device.satellites ?? 0}</strong>
-        </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.speed}</span>
-          <strong>
-            {typeof device.speedKmph === "number" ? `${device.speedKmph.toFixed(1)} km/h` : "—"}
-          </strong>
-        </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.accuracy}</span>
-          <strong>
-            {typeof device.locAccuracyM === "number" ? `${device.locAccuracyM.toFixed(0)} m` : "—"}
-          </strong>
-        </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.geofence}</span>
-          <strong>{device.geoEnabled ? copy.enabled : copy.disabled}</strong>
-        </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.distanceToHome}</span>
+        <div className="place-detail-row">
+          <span className="place-metric__label">
+            <AppIcon name="home" size={15} />
+            {copy.distanceToHome}
+          </span>
           <strong>{formatDistance(device.distanceToHomeM)}</strong>
         </div>
-        <div className="detail-cell">
-          <span className="detail-label">{copy.insideGeofence}</span>
-          <strong>{device.insideGeofence ? copy.yes : copy.no}</strong>
-        </div>
       </div>
-    </section>
+    </div>
   );
 }

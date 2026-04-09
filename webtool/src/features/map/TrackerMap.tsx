@@ -1,7 +1,7 @@
 import "leaflet/dist/leaflet.css";
 import { divIcon } from "leaflet";
-import { startTransition, useEffect, useMemo, useState } from "react";
-import { useMapEvents } from "react-leaflet";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useMap, useMapEvents } from "react-leaflet";
 import {
   Circle,
   CircleMarker,
@@ -11,23 +11,32 @@ import {
   TileLayer,
   Tooltip,
 } from "react-leaflet";
-import type { ThemeMode } from "../../i18n";
+import { formatTimestamp, type Locale, type ThemeMode } from "../../i18n";
 import type { TrackerDeviceSummary, TrackerHistoryPoint } from "../../types/tracker";
 import type { HomePickMode } from "../home/HomePanel";
 
 export type RouteMode = "off" | "selected" | "all";
+export type MapLayerMode = "roadmap" | "satellite";
+export type TrackerMapController = {
+  focusSelected: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+};
 
 type TrackerMapProps = {
   devices: TrackerDeviceSummary[];
   history: TrackerHistoryPoint[];
   homeLabel: string;
   draftPendingLabel: string;
+  locale: Locale;
   selectedDeviceId: string | null;
   theme: ThemeMode;
+  mapLayer: MapLayerMode;
   pickMode: HomePickMode;
   routeMode: RouteMode;
   showHistory: boolean;
   draftHome: { lat: number; lng: number } | null;
+  onControllerReady?: (controller: TrackerMapController | null) => void;
   onMapClick?: (lat: number, lng: number) => void;
 };
 
@@ -64,6 +73,14 @@ const draftIcon = divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   tooltipAnchor: [0, -28],
+});
+
+const selectedDeviceIcon = divIcon({
+  html: '<div class="tracker-pin"><span class="tracker-pin__core"></span></div>',
+  className: "tracker-pin-icon",
+  iconSize: [34, 48],
+  iconAnchor: [17, 46],
+  tooltipAnchor: [0, -38],
 });
 
 const DEFAULT_CENTER: [number, number] = [10.901146, 106.806184];
@@ -116,6 +133,18 @@ function formatDuration(durationS: number): string {
   if (durationS < 60) return `${Math.max(1, Math.round(durationS))} s`;
   if (durationS < 3600) return `${Math.round(durationS / 60)} min`;
   return `${(durationS / 3600).toFixed(1)} h`;
+}
+
+function getHistoryLabel(kind: "start" | "latest", locale: Locale): string {
+  if (locale === "vi") {
+    return kind === "start" ? "Bat dau" : "Moi nhat";
+  }
+
+  return kind === "start" ? "Start" : "Latest";
+}
+
+function formatHistoryPointTooltip(point: TrackerHistoryPoint): string {
+  return `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
 }
 
 function downsamplePositions(
@@ -224,17 +253,51 @@ function MapClickListener({
   return null;
 }
 
+function MapControllerBridge({
+  center,
+  onControllerReady,
+}: {
+  center: [number, number];
+  onControllerReady?: (controller: TrackerMapController | null) => void;
+}) {
+  const map = useMap();
+  const centerRef = useRef(center);
+
+  useEffect(() => {
+    centerRef.current = center;
+  }, [center]);
+
+  useEffect(() => {
+    if (!onControllerReady) return;
+
+    onControllerReady({
+      focusSelected: () => {
+        map.flyTo(centerRef.current, Math.max(map.getZoom(), 17), { duration: 0.5 });
+      },
+      zoomIn: () => map.zoomIn(),
+      zoomOut: () => map.zoomOut(),
+    });
+
+    return () => onControllerReady(null);
+  }, [map, onControllerReady]);
+
+  return null;
+}
+
 export function TrackerMap({
   devices,
   history,
   homeLabel,
   draftPendingLabel,
+  locale,
   selectedDeviceId,
   theme,
+  mapLayer,
   pickMode,
   routeMode,
   showHistory,
   draftHome,
+  onControllerReady,
   onMapClick,
 }: TrackerMapProps) {
   const [roadRoutes, setRoadRoutes] = useState<RoadRoute[]>([]);
@@ -247,22 +310,50 @@ export function TrackerMap({
     () =>
       history.filter(
         (p) => isValidPair(p.lat, p.lng) && !isBootstrapHistoryPoint(p)
-      ),
+      ).sort((a, b) => a.timestamp - b.timestamp),
     [history]
   );
+  const historyStart = visibleHistory[0] ?? null;
+  const historyLatest = visibleHistory[visibleHistory.length - 1] ?? null;
+  const intermediateHistory =
+    visibleHistory.length > 2 ? visibleHistory.slice(1, -1) : [];
+  const shouldShowHistoryStart =
+    historyStart !== null &&
+    historyLatest !== null &&
+    historyStart !== historyLatest &&
+    (Math.abs(historyStart.lat - historyLatest.lat) > BOOTSTRAP_EPSILON ||
+      Math.abs(historyStart.lng - historyLatest.lng) > BOOTSTRAP_EPSILON);
   const selectedDevice =
     visibleDevices.find((d) => d.deviceId === selectedDeviceId) ?? null;
 
-  const center: [number, number] = selectedDevice
-    ? [selectedDevice.lat, selectedDevice.lng]
-    : visibleDevices[0]
-      ? [visibleDevices[0].lat, visibleDevices[0].lng]
-      : DEFAULT_CENTER;
+  const center = useMemo<[number, number]>(
+    () =>
+      selectedDevice
+        ? [selectedDevice.lat, selectedDevice.lng]
+        : visibleDevices[0]
+          ? [visibleDevices[0].lat, visibleDevices[0].lng]
+          : DEFAULT_CENTER,
+    [selectedDevice, visibleDevices],
+  );
 
-  const tileUrl =
-    theme === "light"
-      ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  const tileConfig = useMemo(
+    () =>
+      mapLayer === "satellite"
+        ? {
+          attribution: "&copy; Esri & contributors",
+          subdomains: undefined,
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        }
+        : {
+          attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+          subdomains: ["a", "b", "c", "d"],
+          url:
+            theme === "light"
+              ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        },
+    [mapLayer, theme],
+  );
 
   const routeRequests = useMemo<RouteRequest[]>(() => {
     if (routeMode === "off") return [];
@@ -344,73 +435,163 @@ export function TrackerMap({
       <MapContainer
         center={center}
         className="map-canvas"
-        key={`${center[0]}:${center[1]}:${theme}`}
+        key={`${center[0]}:${center[1]}:${theme}:${mapLayer}`}
         scrollWheelZoom
         zoom={15}
-        zoomControl
+        zoomControl={false}
       >
         <TileLayer
-          attribution="&copy; OpenStreetMap contributors &copy; CARTO"
-          subdomains={["a", "b", "c", "d"]}
-          url={tileUrl}
+          attribution={tileConfig.attribution}
+          subdomains={tileConfig.subdomains}
+          url={tileConfig.url}
         />
 
         <MapClickListener
           active={pickMode === "picking"}
           onMapClick={onMapClick ?? (() => {})}
         />
+        <MapControllerBridge center={center} onControllerReady={onControllerReady} />
 
-        {visibleDevices.map((device) => (
-          <CircleMarker
-            key={device.deviceId}
-            center={[device.lat, device.lng]}
-            radius={device.deviceId === selectedDeviceId ? 12 : 8}
-            pathOptions={{
-              color: device.online ? "#00c8ff" : "#f97316",
-              fillColor: device.deviceId === selectedDeviceId ? "#6366f1" : "#00b4ff",
-              fillOpacity: 0.92,
-              weight: 2.5,
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -10]}>
-              <div>
-                <strong>{device.deviceName}</strong>
-                <div style={{ opacity: 0.7, fontSize: "0.8em" }}>{device.deviceId}</div>
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        ))}
+        {visibleDevices.map((device) =>
+          device.deviceId === selectedDeviceId ? (
+            <Marker
+              key={device.deviceId}
+              position={[device.lat, device.lng]}
+              icon={selectedDeviceIcon}
+              zIndexOffset={900}
+            >
+              <Tooltip direction="top" offset={[0, -30]}>
+                <div>
+                  <strong>{device.deviceName}</strong>
+                  <div style={{ opacity: 0.7, fontSize: "0.8em" }}>{device.deviceId}</div>
+                </div>
+              </Tooltip>
+            </Marker>
+          ) : (
+            <CircleMarker
+              key={device.deviceId}
+              center={[device.lat, device.lng]}
+              radius={6}
+              pathOptions={{
+                color: "#5f6368",
+                fillColor: device.online ? "#76a7fa" : "#9aa0a6",
+                fillOpacity: 0.94,
+                weight: 2,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -10]}>
+                <div>
+                  <strong>{device.deviceName}</strong>
+                  <div style={{ opacity: 0.7, fontSize: "0.8em" }}>{device.deviceId}</div>
+                </div>
+              </Tooltip>
+            </CircleMarker>
+          ),
+        )}
 
         {showHistory && visibleHistory.length > 1 && (
-          <Polyline
-            positions={visibleHistory.map((p) => [p.lat, p.lng])}
-            pathOptions={{ color: "#6366f1", weight: 3.5, opacity: 0.75 }}
-          />
+          <>
+            <Polyline
+              positions={visibleHistory.map((p) => [p.lat, p.lng])}
+              pathOptions={{
+                color: theme === "light" ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.88)",
+                weight: 8,
+                opacity: 0.95,
+              }}
+            />
+            <Polyline
+              positions={visibleHistory.map((p) => [p.lat, p.lng])}
+              pathOptions={{ color: "#2563eb", weight: 4.5, opacity: 0.92 }}
+            />
+          </>
         )}
 
         {showHistory &&
-          visibleHistory.map((point) => (
+          intermediateHistory.map((point) => (
             <CircleMarker
               key={`${point.deviceId}-${point.timestamp}`}
               center={[point.lat, point.lng]}
-              radius={3.5}
+              radius={6}
               pathOptions={{
-                color: "#818cf8",
-                fillColor: "#818cf8",
-                fillOpacity: 0.6,
-                weight: 1,
+                color: "#ffffff",
+                fillColor: "#2563eb",
+                fillOpacity: 0.96,
+                weight: 2.5,
               }}
-            />
+            >
+              <Tooltip className="history-point-tooltip" direction="top" offset={[0, -8]}>
+                <div className="history-point-tooltip__body">
+                  <strong>{formatTimestamp(point.timestamp, locale)}</strong>
+                  <div>{point.lat.toFixed(6)}, {point.lng.toFixed(6)}</div>
+                </div>
+              </Tooltip>
+            </CircleMarker>
           ))}
+
+        {showHistory && shouldShowHistoryStart && historyStart && (
+          <CircleMarker
+            center={[historyStart.lat, historyStart.lng]}
+            radius={9}
+            pathOptions={{
+              color: "#ffffff",
+              fillColor: "#16a34a",
+              fillOpacity: 1,
+              weight: 3,
+            }}
+          >
+            <Tooltip
+              className="history-point-tooltip history-point-tooltip--key"
+              direction="top"
+              offset={[0, -10]}
+              permanent
+            >
+              <div className="history-point-tooltip__body">
+                <span className="history-point-tooltip__tag">
+                  {getHistoryLabel("start", locale)}
+                </span>
+                <strong>{formatTimestamp(historyStart.timestamp, locale)}</strong>
+                <div>{formatHistoryPointTooltip(historyStart)}</div>
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        )}
+
+        {showHistory && historyLatest && (
+          <CircleMarker
+            center={[historyLatest.lat, historyLatest.lng]}
+            radius={10}
+            pathOptions={{
+              color: "#ffffff",
+              fillColor: "#ef4444",
+              fillOpacity: 1,
+              weight: 3,
+            }}
+          >
+            <Tooltip
+              className="history-point-tooltip history-point-tooltip--key"
+              direction="top"
+              offset={[0, -10]}
+              permanent
+            >
+              <div className="history-point-tooltip__body">
+                <span className="history-point-tooltip__tag">
+                  {getHistoryLabel("latest", locale)}
+                </span>
+                <strong>{formatTimestamp(historyLatest.timestamp, locale)}</strong>
+                <div>{formatHistoryPointTooltip(historyLatest)}</div>
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        )}
 
         {roadRoutes.map((route) => (
           <Polyline
             key={`route-${route.deviceId}`}
             positions={route.positions}
             pathOptions={{
-              color: route.selected ? "#facc15" : "#94a3b8",
+              color: route.selected ? "#2b7de9" : "#9aa0a6",
               weight: route.selected ? 4 : 2.5,
-              opacity: route.selected ? 0.95 : 0.72,
+              opacity: route.selected ? 0.88 : 0.56,
               dashArray: route.source === "fallback" ? "8 6" : undefined,
             }}
           >
@@ -430,8 +611,8 @@ export function TrackerMap({
               center={[selectedDevice.homeLat!, selectedDevice.homeLng!]}
               radius={9}
               pathOptions={{
-                color: "#38bdf8",
-                fillColor: "#0ea5e9",
+                color: "#1a73e8",
+                fillColor: "#76a7fa",
                 fillOpacity: 0.9,
                 weight: 2,
               }}
@@ -444,10 +625,10 @@ export function TrackerMap({
                 center={[selectedDevice.homeLat!, selectedDevice.homeLng!]}
                 radius={selectedDevice.geoRadiusM!}
                 pathOptions={{
-                  color: "#38bdf8",
+                  color: "#1a73e8",
                   opacity: 0.6,
-                  fillColor: "#38bdf8",
-                  fillOpacity: 0.07,
+                  fillColor: "#76a7fa",
+                  fillOpacity: 0.08,
                   dashArray: "6 4",
                 }}
               />

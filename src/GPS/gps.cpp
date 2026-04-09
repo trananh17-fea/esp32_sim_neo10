@@ -452,6 +452,25 @@ static bool tryInjectPositionFromNVS() {
 }
 
 static bool tryInjectPositionFromNetwork() {
+  if (WiFi.status() != WL_CONNECTED) {
+    if ((millis() - gpsAcqStartMs) < 30000UL) {
+      logPrintf("[GPS] Skip network aiding: waiting modem settle %lus/30s",
+                (millis() - gpsAcqStartMs) / 1000UL);
+      return false;
+    }
+
+    if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered()) {
+      logLine("[GPS] Skip network aiding: SIM not registered yet");
+      return false;
+    }
+
+    const int csq = sim_readCSQ();
+    if (csq < 0 || csq > 31) {
+      logPrintf("[GPS] Skip network aiding: SIM signal not usable csq=%d", csq);
+      return false;
+    }
+  }
+
   logLine("[GPS] Trying network-based coarse position for faster fix...");
   if (!acquireNetworkLocationNow()) {
     logLine("[GPS] Network location unavailable for GPS aiding");
@@ -654,39 +673,67 @@ String getGPSLink() {
   double finalLat = 0;
   double finalLng = 0;
   bool hasLocation = false;
+  bool canScanFreshNow = true;
 
-  // 1. Ưu tiên hàng đầu: Kiểm tra nếu GPS đã có vị trí mới (trong vòng 1 phút)
+  if (WiFi.status() != WL_CONNECTED && simMutex) {
+    if (xSemaphoreTake(simMutex, pdMS_TO_TICKS(1200)) != pdTRUE) {
+      canScanFreshNow = false;
+      logLine(
+          "[SOS] Modem đang bận tracking/HTTP, bỏ qua quét LBS mới để tránh treo");
+    } else {
+      xSemaphoreGive(simMutex);
+    }
+  }
+
+  // 1. Ưu tiên 1: Vị trí chính xác từ GPS (phải là vị trí mới cập nhật trong
+  // vòng 1 phút)
   if (telem.gpsReady && (millis() - telem.lastGpsUpdateMs < 60000)) {
     finalLat = GPS_getLatitude();
     finalLng = GPS_getLongitude();
     hasLocation = true;
     logLine("[SOS] Sử dụng vị trí chính xác từ GPS");
   }
-  // 2. Nếu GPS không có, thử lấy vị trí từ SIM (LBS) ngay lập tức
+  // 2. Ưu tiên 2: NẾU GPS MẤT/CŨ -> BẮT BUỘC ÉP QUÉT LBS MỚI (Khắc phục lỗi gửi
+  // vị trí cũ)
   else {
-    logLine("[SOS] GPS chưa fix, đang quét vị trí từ trạm SIM (LBS)...");
+    logLine("[SOS] GPS không sẵn sàng hoặc đã cũ, đang quét LBS thực tế ngay "
+            "lúc này...");
 
-    // Gọi hàm quét LBS (đã sửa ở Bước 1)
-    if (acquireNetworkLocationNow()) {
-      // Lấy lại dữ liệu mới nhất sau khi quét thành công
-      getTelemetrySnapshot(&telem);
+    // Gọi hàm quét LBS trực tiếp (mất khoảng 3-5s nhưng ra vị trí thật lúc bấm
+    // nút)
+    if (canScanFreshNow && acquireNetworkLocationNow()) {
+      getTelemetrySnapshot(&telem); // Lấy lại dữ liệu sau khi quét xong
       finalLat = telem.networkLocLat;
       finalLng = telem.networkLocLng;
       hasLocation = true;
-      logLine("[SOS] Sử dụng vị trí tương đối từ trạm SIM (LBS)");
+      logLine("[SOS] Thành công! Đã lấy vị trí trạm LBS mới nhất.");
+    }
+    // 3. Ưu tiên 3: Nếu quét LBS ngay lúc này thất bại (do rớt sóng SIM),
+    // mới đành ngậm ngùi lấy lại vị trí LBS/GPS cuối cùng còn lưu trong Cache
+    else if (telem.networkLocReady && telem.networkLocLat != 0.0) {
+      finalLat = telem.networkLocLat;
+      finalLng = telem.networkLocLng;
+      hasLocation = true;
+      logLine(
+          "[SOS] Quét LBS mới thất bại, dùng tạm vị trí LBS cũ trong Cache");
+    } else if (GPS_getLatitude() != 0.0) {
+      finalLat = GPS_getLatitude();
+      finalLng = GPS_getLongitude();
+      hasLocation = true;
+      logLine("[SOS] Dùng vị trí GPS cũ nhất có thể");
     }
   }
 
-  // 3. Tạo link dựa trên kết quả
+  // 4. Tạo link Gửi tin nhắn (ĐÃ FIX LỖI ĐỊNH DẠNG LINK BẢN ĐỒ)
   if (hasLocation) {
-    // SỬA LỖI: Thêm định dạng %.6f để truyền tọa độ vào chuỗi
+    // Lưu ý: Đã sửa lại định dạng chuẩn của Google Maps và thêm %.6f để truyền
+    // biến
     snprintf(buffer, sizeof(buffer), "https://maps.google.com/?q=%.6f,%.6f",
              finalLat, finalLng);
   } else {
-    // Chỉ sử dụng config khi cả GPS và LBS đều thất bại hoàn toàn
-    logLine("[SOS] CẢNH BÁO: Không có vị trí mới, dùng vị trí mặc định");
+    logLine("[SOS] CẢNH BÁO: Không có vị trí nào, dùng vị trí mặc định");
     snprintf(buffer, sizeof(buffer),
-             "https://maps.google.com/?q=%s,%s (Vị trí cũ)", GPS_LOCAL_LAT,
+             "https://maps.google.com/?q=%.6f,%.6f (Vi tri cu)", GPS_LOCAL_LAT,
              GPS_LOCAL_LNG);
   }
 

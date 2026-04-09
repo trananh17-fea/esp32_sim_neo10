@@ -12,12 +12,10 @@ function rangeToFromTimestamp(range: HistoryRange) {
   const now = Date.now();
 
   switch (range) {
-    case "30m":
-      return now - 30 * 60 * 1000;
-    case "6h":
-      return now - 6 * 60 * 60 * 1000;
     case "24h":
       return now - 24 * 60 * 60 * 1000;
+    case "3d":
+      return now - 3 * 24 * 60 * 60 * 1000;
     case "7d":
       return now - 7 * 24 * 60 * 60 * 1000;
   }

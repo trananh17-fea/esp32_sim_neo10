@@ -47,7 +47,7 @@ export type AppCopy = {
   noHistory: string;
   lastUpdated: string;
   homeLabel: string;
-  rangeLabels: Record<"30m" | "6h" | "24h" | "7d", string>;
+  rangeLabels: Record<"24h" | "3d" | "7d", string>;
   // Home panel
   homePanel: string;
   homePanelDesc: string;
@@ -124,9 +124,8 @@ export const translations: Record<Locale, AppCopy> = {
     lastUpdated: "Last updated",
     homeLabel: "Home",
     rangeLabels: {
-      "30m": "30 min",
-      "6h": "6 hours",
       "24h": "24 hours",
+      "3d": "3 days", 
       "7d": "7 days",
     },
     homePanel: "Home Location",
@@ -202,9 +201,8 @@ export const translations: Record<Locale, AppCopy> = {
     lastUpdated: "Cập nhật lúc",
     homeLabel: "HOME",
     rangeLabels: {
-      "30m": "30 phút",
-      "6h": "6 giờ",
       "24h": "24 giờ",
+      "3d": "3 ngày",
       "7d": "7 ngày",
     },
     homePanel: "Vị trí HOME",

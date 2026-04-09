@@ -363,6 +363,8 @@ function normalizeSnapshot(deviceId, payload) {
   const locAccuracyM = normalizeNumber(payload.locAccuracyM);
   const locAgeMs = normalizeNumber(payload.locAgeMs);
   const locSource = normalizeString(payload.locSource, "none");
+  const batteryPercent = normalizeNumber(payload.batteryPercent);
+  const batteryVoltageV = normalizeNumber(payload.batteryVoltageV);
   const deviceName = normalizeDeviceName(
     payload.deviceName ?? payload.name,
     deviceId,
@@ -387,6 +389,8 @@ function normalizeSnapshot(deviceId, payload) {
 
   if (locAccuracyM !== null) snapshot.locAccuracyM = locAccuracyM;
   if (locAgeMs !== null) snapshot.locAgeMs = locAgeMs;
+  if (batteryPercent !== null) snapshot.batteryPercent = batteryPercent;
+  if (batteryVoltageV !== null) snapshot.batteryVoltageV = batteryVoltageV;
 
   if (isValidCoordPair(homeLat, homeLng)) {
     snapshot.homeLat = homeLat;
@@ -587,6 +591,8 @@ export default {
             locAgeMs: url.searchParams.get("locAgeMs"),
             satellites: url.searchParams.get("satellites"),
             speedKmph: url.searchParams.get("speedKmph"),
+            batteryPercent: url.searchParams.get("batteryPercent"),
+            batteryVoltageV: url.searchParams.get("batteryVoltageV"),
             historySample,
           }),
           existingMeta,

@@ -1,4 +1,4 @@
-export type HistoryRange = "30m" | "6h" | "24h" | "7d";
+export type HistoryRange =  "24h" | "3d" | "7d";
 
 export type TrackerDeviceSummary = {
   deviceId: string;

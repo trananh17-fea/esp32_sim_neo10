@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
+import { AppIcon } from "../../components/AppIcon";
 import type { AppCopy } from "../../i18n";
-import type { TrackerDeviceSummary } from "../../types/tracker";
 import { clearDeviceHome, setDeviceHome } from "../../services/api/trackerApi";
+import type { TrackerDeviceSummary } from "../../types/tracker";
 
 export type HomePickMode = "idle" | "picking";
 
 type HomePanelProps = {
   copy: AppCopy;
   device: TrackerDeviceSummary | null;
-  pickMode: HomePickMode;
-  pendingPick: { lat: number; lng: number } | null;
-  onStartPick: () => void;
   onCancelPick: () => void;
-  onHomeSaved: (homeLat: number, homeLng: number, distanceToHomeM: number) => void;
-  onHomeCleared: () => void;
   onDraftChange: (pos: { lat: number; lng: number } | null) => void;
+  onHomeCleared: () => void;
+  onHomeSaved: (homeLat: number, homeLng: number, distanceToHomeM: number) => void;
+  onStartPick: () => void;
+  pendingPick: { lat: number; lng: number } | null;
+  pickMode: HomePickMode;
 };
 
-/** Haversine distance in metres (client-side preview before server confirms) */
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -29,45 +29,33 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Compass bearing in degrees 0–360 */
-function bearingDeg(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLng = toRad(lng2 - lng1);
-  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
-  const x =
-    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+function formatDistance(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "--";
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} km`;
+  return `${Math.round(value)} m`;
 }
 
-function formatDistance(m: number): string {
-  if (m >= 1000) return `${(m / 1000).toFixed(2)} km`;
-  return `${Math.round(m)} m`;
-}
-
-function formatBearing(deg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return `${Math.round(deg)}° ${dirs[Math.round(deg / 45) % 8]}`;
+function formatCoordPair(lat?: number, lng?: number) {
+  if (typeof lat !== "number" || typeof lng !== "number") return "Chưa đặt địa chỉ nhà";
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
 export function HomePanel({
   copy,
   device,
-  pickMode,
-  pendingPick,
-  onStartPick,
   onCancelPick,
-  onHomeSaved,
-  onHomeCleared,
   onDraftChange,
+  onHomeCleared,
+  onHomeSaved,
+  onStartPick,
+  pendingPick,
+  pickMode,
 }: HomePanelProps) {
   const [latStr, setLatStr] = useState("");
   const [lngStr, setLngStr] = useState("");
-  const [geoRadius, setGeoRadius] = useState("0");
   const [status, setStatus] = useState<"idle" | "saving" | "ok" | "cleared" | "error">("idle");
   const [errMsg, setErrMsg] = useState("");
 
-  // When a map pick comes in, fill the inputs
   useEffect(() => {
     if (pendingPick) {
       setLatStr(pendingPick.lat.toFixed(6));
@@ -76,18 +64,17 @@ export function HomePanel({
     }
   }, [pendingPick]);
 
-  // Reset when device changes
   useEffect(() => {
     if (device?.homeLat !== undefined && device.homeLat !== null) {
       setLatStr(device.homeLat.toFixed(6));
       setLngStr((device.homeLng ?? 0).toFixed(6));
-      setGeoRadius(String(device.geoRadiusM ?? 0));
     } else {
       setLatStr("");
       setLngStr("");
-      setGeoRadius("0");
     }
+
     setStatus("idle");
+    setErrMsg("");
   }, [device?.deviceId]);
 
   const parsedLat = parseFloat(latStr.replace(",", "."));
@@ -99,193 +86,138 @@ export function HomePanel({
     Math.abs(parsedLng) <= 180 &&
     !(parsedLat === 0 && parsedLng === 0);
 
-  // Sync draft position to App map
   useEffect(() => {
     if (isValidCoords) {
       onDraftChange({ lat: parsedLat, lng: parsedLng });
     } else {
       onDraftChange(null);
     }
-  }, [isValidCoords, parsedLat, parsedLng, onDraftChange]);
+  }, [isValidCoords, onDraftChange, parsedLat, parsedLng]);
 
-  if (!device) return null;
+  if (!device) {
+    return <div className="place-sheet__empty">{copy.chooseDevice}</div>;
+  }
 
-  // Preview computation (uses device's current position)
-  const previewDist =
+  const previewDistance =
     isValidCoords && Number.isFinite(device.lat) && Number.isFinite(device.lng)
       ? haversineM(device.lat, device.lng, parsedLat, parsedLng)
       : null;
 
-  const previewBearing =
-    isValidCoords && Number.isFinite(device.lat) && Number.isFinite(device.lng)
-      ? bearingDeg(device.lat, device.lng, parsedLat, parsedLng)
-      : null;
+  const selectedAddress = isValidCoords
+    ? formatCoordPair(parsedLat, parsedLng)
+    : formatCoordPair(device.homeLat, device.homeLng);
 
   const handleUseCurrentPos = () => {
-    if (Number.isFinite(device.lat) && Number.isFinite(device.lng)) {
-      setLatStr(device.lat.toFixed(6));
-      setLngStr(device.lng.toFixed(6));
-      setStatus("idle");
-    }
+    setLatStr(device.lat.toFixed(6));
+    setLngStr(device.lng.toFixed(6));
+    setStatus("idle");
   };
 
   const handleSave = async () => {
     if (!isValidCoords) return;
-    setStatus("saving");
-    setErrMsg("");
+
     try {
-      const geoR = parseFloat(geoRadius) || 0;
-      const result = await setDeviceHome(
-        device,
-        parsedLat,
-        parsedLng,
-        geoR > 0 ? geoR : undefined
-      );
+      setStatus("saving");
+      setErrMsg("");
+      const result = await setDeviceHome(device, parsedLat, parsedLng, undefined);
       onHomeSaved(result.homeLat!, result.homeLng!, result.distanceToHomeM);
       setStatus("ok");
-      setTimeout(() => setStatus("idle"), 3000);
     } catch (err) {
-      setErrMsg(err instanceof Error ? err.message : "Error");
       setStatus("error");
+      setErrMsg(err instanceof Error ? err.message : "Failed to save home");
     }
   };
 
   const handleClear = async () => {
-    setStatus("saving");
     try {
+      setStatus("saving");
+      setErrMsg("");
       await clearDeviceHome(device);
       onHomeCleared();
       setLatStr("");
       setLngStr("");
-      setGeoRadius("0");
       setStatus("cleared");
-      setTimeout(() => setStatus("idle"), 3000);
     } catch (err) {
-      setErrMsg(err instanceof Error ? err.message : "Error");
       setStatus("error");
+      setErrMsg(err instanceof Error ? err.message : "Failed to clear home");
     }
   };
 
   return (
-    <section className="panel home-panel">
-      <div className="panel__header">
-        <div>
-          <p className="panel__eyebrow">📍 {copy.homePanel}</p>
-          <h3 className="panel__title">{device.deviceName}</h3>
+    <div className="place-pane">
+      <div className="maps-home-card">
+        <div className="maps-home-card__icon">
+          <AppIcon name="home" size={18} />
         </div>
-        {device.homeSet && (
-          <span className="home-set-badge">
-            ✓ HOME
-          </span>
-        )}
+        <div className="maps-home-card__body">
+          <p className="maps-home-card__eyebrow">Nhà riêng</p>
+          <strong className="maps-home-card__title">
+            {device.homeSet ? "Đã lưu địa chỉ nhà" : "Chưa đặt địa chỉ nhà"}
+          </strong>
+          <p className="maps-home-card__address">{selectedAddress}</p>
+        </div>
       </div>
 
-      <p className="muted" style={{ marginBottom: 14 }}>{copy.homePanelDesc}</p>
-
-      {/* Pick mode hint */}
-      {pickMode === "picking" && (
-        <div className="pick-hint">
-          <span className="pick-hint__dot" />
-          {copy.pickOnMapHint}
-          <button className="pick-cancel-btn" type="button" onClick={onCancelPick}>✕</button>
+      {pickMode === "picking" ? (
+        <div className="maps-inline-alert">
+          <AppIcon name="location" size={15} />
+          <span>{copy.pickOnMapHint}</span>
         </div>
-      )}
+      ) : null}
 
-      {/* Coordinate inputs */}
-      <div className="home-coords-row">
-        <input
-          className="text-input"
-          value={latStr}
-          onChange={(e) => { setLatStr(e.target.value); setStatus("idle"); }}
-          placeholder={copy.latPlaceholder}
-          type="text"
-        />
-        <input
-          className="text-input"
-          value={lngStr}
-          onChange={(e) => { setLngStr(e.target.value); setStatus("idle"); }}
-          placeholder={copy.lngPlaceholder}
-          type="text"
-        />
+      {status === "error" ? (
+        <div className="maps-inline-alert maps-inline-alert--error">{errMsg}</div>
+      ) : null}
+
+      {status === "ok" ? (
+        <div className="maps-inline-alert maps-inline-alert--success">{copy.homeSaved}</div>
+      ) : null}
+
+      {status === "cleared" ? (
+        <div className="maps-inline-alert maps-inline-alert--success">{copy.homeCleared}</div>
+      ) : null}
+
+      <div className="place-detail-grid">
+        <div className="place-detail-row">
+          <span>Khoảng cách từ thiết bị</span>
+          <strong>{formatDistance(previewDistance ?? device.distanceToHomeM ?? null)}</strong>
+        </div>
       </div>
 
-      {/* Geofence radius */}
-      <div className="home-geo-row">
-        <label className="detail-label">{copy.geoRadiusLabel}</label>
-        <input
-          className="text-input geo-input"
-          value={geoRadius}
-          onChange={(e) => setGeoRadius(e.target.value)}
-          placeholder={copy.geoRadiusHint}
-          type="number"
-          min="0"
-          max="100000"
-        />
-      </div>
-
-      {/* Preview — live haversine estimate */}
-      {previewDist !== null && (
-        <div className="home-preview">
-          <div className="home-preview__item">
-            <span className="detail-label">{copy.distanceLabel}</span>
-            <strong className="home-preview__value">{formatDistance(previewDist)}</strong>
-          </div>
-          {previewBearing !== null && (
-            <div className="home-preview__item">
-              <span className="detail-label">{copy.bearingLabel}</span>
-              <strong className="home-preview__value">{formatBearing(previewBearing)}</strong>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="home-actions">
+      <div className="maps-home-actions">
         <button
-          className="home-btn home-btn--pick"
-          type="button"
+          className="maps-home-action maps-home-action--primary"
           onClick={pickMode === "picking" ? onCancelPick : onStartPick}
+          type="button"
         >
-          {pickMode === "picking" ? "✕ Cancel" : `🗺 ${copy.pickOnMapBtn}`}
+          <AppIcon name="location" size={16} />
+          <span>{pickMode === "picking" ? "Hủy chọn trên bản đồ" : "Chọn trên bản đồ"}</span>
+        </button>
+        <button className="maps-home-action" onClick={handleUseCurrentPos} type="button">
+          <AppIcon name="refresh" size={16} />
+          <span>{copy.useCurrentPos}</span>
         </button>
         <button
-          className="home-btn home-btn--current"
-          type="button"
-          onClick={handleUseCurrentPos}
-        >
-          ◎ {copy.useCurrentPos}
-        </button>
-        <button
-          className="action-button"
-          type="button"
+          className="maps-home-action"
           disabled={!isValidCoords || status === "saving"}
           onClick={handleSave}
-          style={{ flex: 1 }}
+          type="button"
         >
-          {status === "saving" ? copy.homeSaving : copy.setHomeBtn}
+          <AppIcon name="saved" size={16} />
+          <span>{status === "saving" ? copy.homeSaving : "Lưu nhà riêng"}</span>
         </button>
-        {device.homeSet && (
+        {device.homeSet ? (
           <button
-            className="home-btn home-btn--clear"
-            type="button"
+            className="maps-home-action"
             disabled={status === "saving"}
             onClick={handleClear}
+            type="button"
           >
-            🗑 {copy.clearHomeBtn}
+            <AppIcon name="close" size={16} />
+            <span>{copy.clearHomeBtn}</span>
           </button>
-        )}
+        ) : null}
       </div>
-
-      {/* Feedback */}
-      {status === "ok" && (
-        <div className="home-feedback home-feedback--ok">{copy.homeSaved}</div>
-      )}
-      {status === "cleared" && (
-        <div className="home-feedback home-feedback--ok">{copy.homeCleared}</div>
-      )}
-      {status === "error" && (
-        <div className="home-feedback home-feedback--err">{errMsg || "Error"}</div>
-      )}
-    </section>
+    </div>
   );
 }

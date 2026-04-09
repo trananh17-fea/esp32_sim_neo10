@@ -11,7 +11,6 @@ static void sosTask(void *pvParameters) {
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
 
-  telemetrySetSosState(true);
   telemetrySetSosCancelRequested(false);
   logLine("[SOS] === EMERGENCY TRIGGERED ===");
 
@@ -53,9 +52,14 @@ static void startSosTask(bool enableBuzzer) {
     return;
   }
 
+  telemetrySetSosState(true);
+  telemetrySetSosCancelRequested(false);
+
   BaseType_t ok = xTaskCreatePinnedToCore(sosTask, "sosTask", 8192, NULL, 2,
                                           &sSosTaskHandle, 1);
   if (ok != pdPASS) {
+    telemetrySetSosState(false);
+    telemetrySetSosCancelRequested(false);
     sSosTaskHandle = NULL;
     logLine("[SOS] Failed to create sosTask");
     return;

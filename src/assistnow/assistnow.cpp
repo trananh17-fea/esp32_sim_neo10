@@ -10,6 +10,7 @@ static const char *FILE_UBX = "/assistnow.ubx";
 static const char *FILE_TS = "/assistnow_ts.txt";
 static const unsigned long CACHE_MAX_AGE_S = 7UL * 24UL * 3600UL;
 static bool fsReady = false;
+static bool assistDownloadedThisBoot = false;
 
 // ============================================================
 static bool ensureFS() {
@@ -253,6 +254,11 @@ static int tryDownloadURL(const String &url) {
 bool downloadAssistNow() {
   if (!ensureFS())
     return false;
+  if (assistDownloadedThisBoot && validateUBXFile()) {
+    Serial.println("[ASSIST] Already downloaded this boot, reuse cache");
+    telemetrySetAssistStatus("cache_fresh");
+    return true;
+  }
 
   // FRESH CACHE → skip download entirely, inject directly
   if (isCacheFresh() && validateUBXFile()) {
@@ -306,6 +312,7 @@ bool downloadAssistNow() {
     int bytes = tryDownloadURL(urls[i]);
     if (bytes > 0 && validateUBXFile()) {
       saveCacheTimestamp();
+      assistDownloadedThisBoot = true;
       Serial.printf("[ASSIST] ✓ OK: %d bytes\n", bytes);
       telemetrySetAssistStatus("download_ok");
       return true;
@@ -382,6 +389,11 @@ bool injectAssistNow(HardwareSerial &gpsSerial) {
 bool downloadAssistNowViaSIM() {
   if (!ensureFS())
     return false;
+  if (assistDownloadedThisBoot && validateUBXFile()) {
+    Serial.println("[ASSIST-SIM] Already downloaded this boot, reuse cache");
+    telemetrySetAssistStatus("cache_fresh");
+    return true;
+  }
 
   // Fresh cache → skip
   if (isCacheFresh() && validateUBXFile()) {
@@ -434,6 +446,7 @@ bool downloadAssistNowViaSIM() {
     int bytes = SIM7680C_httpGetToFile(urls[i], FILE_UBX);
     if (bytes > 0 && validateUBXFile()) {
       saveCacheTimestamp();
+      assistDownloadedThisBoot = true;
       Serial.printf("[ASSIST-SIM] OK: %d bytes\n", bytes);
       telemetrySetAssistStatus("download_sim_ok");
       return true;

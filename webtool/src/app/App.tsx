@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { AppIcon } from "../components/AppIcon";
 import { DeviceDetails } from "../features/devices/DeviceDetails";
-import { DeviceSidebar } from "../features/devices/DeviceSidebar";
-import { HomePanel, type HomePickMode } from "../features/home/HomePanel";
 import { HistoryTimeline } from "../features/history/HistoryTimeline";
-import { TrackerMap, type RouteMode } from "../features/map/TrackerMap";
+import { HomePanel, type HomePickMode } from "../features/home/HomePanel";
 import {
-  formatTimestamp,
-  translations,
-  type Locale,
-  type ThemeMode,
-} from "../i18n";
+  type MapLayerMode,
+  TrackerMap,
+  type RouteMode,
+  type TrackerMapController,
+} from "../features/map/TrackerMap";
+import { formatTimestamp, translations, type Locale, type ThemeMode } from "../i18n";
 import {
   fetchDeviceLocation,
   fetchDevices,
@@ -23,12 +23,14 @@ import type {
 } from "../types/tracker";
 
 const REFRESH_INTERVAL_MS = 60000;
-const rangeOptions: HistoryRange[] = ["30m", "6h", "24h", "7d"];
+const RANGE_OPTIONS: HistoryRange[] = ["24h", "3d", "7d"];
 
 const STORAGE_KEYS = {
   locale: "neo10-webtool-locale",
   theme: "neo10-webtool-theme",
 } as const;
+
+type SidebarSection = "saved" | "recent" | "home";
 
 function getInitialLocale(): Locale {
   const saved = window.localStorage.getItem(STORAGE_KEYS.locale);
@@ -39,7 +41,13 @@ function getInitialLocale(): Locale {
 function getInitialTheme(): ThemeMode {
   const saved = window.localStorage.getItem(STORAGE_KEYS.theme);
   if (saved === "dark" || saved === "light") return saved;
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  return "light";
+}
+
+function cycleRouteMode(current: RouteMode): RouteMode {
+  if (current === "off") return "selected";
+  if (current === "selected") return "all";
+  return "off";
 }
 
 export function App() {
@@ -53,15 +61,22 @@ export function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
-
-  // Map & Home feature state
   const [showHistory, setShowHistory] = useState(false);
-  const [routeMode, setRouteMode] = useState<"off" | "selected" | "all">("off");
+  const [routeMode, setRouteMode] = useState<RouteMode>("off");
+  const [mapLayer, setMapLayer] = useState<MapLayerMode>("roadmap");
   const [pickMode, setPickMode] = useState<HomePickMode>("idle");
   const [pendingPick, setPendingPick] = useState<{ lat: number; lng: number } | null>(null);
   const [draftHome, setDraftHome] = useState<{ lat: number; lng: number } | null>(null);
+  const [sidebarSection, setSidebarSection] = useState<SidebarSection>("saved");
+  const [mapController, setMapController] = useState<TrackerMapController | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const copy = translations[locale];
+  const onlineCount = devices.filter((device) => device.online).length;
+  const selectedDevice = useMemo(
+    () => devices.find((device) => device.deviceId === selectedDeviceId) ?? null,
+    [devices, selectedDeviceId],
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -72,63 +87,69 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+
     const loadDevices = async () => {
       try {
         if (!cancelled) setLoadingDevices(true);
         const nextDevices = await fetchDevices();
         if (cancelled) return;
+
         setDevices(nextDevices);
         setLastUpdatedAt(Date.now());
         setSelectedDeviceId((current) => {
-          if (current && nextDevices.some((d) => d.deviceId === current)) return current;
+          if (current && nextDevices.some((device) => device.deviceId === current)) return current;
           return nextDevices[0]?.deviceId ?? null;
         });
         setError(null);
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message :
-              locale === "vi" ? "Không tải được danh sách thiết bị." : "Failed to load devices."
-          );
+          setError(err instanceof Error ? err.message : "Failed to load devices.");
         }
       } finally {
         if (!cancelled) setLoadingDevices(false);
       }
     };
+
     loadDevices();
     const timer = window.setInterval(loadDevices, REFRESH_INTERVAL_MS);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [locale]);
 
-  const selectedDevice = useMemo(
-    () => devices.find((d) => d.deviceId === selectedDeviceId) ?? null,
-    [devices, selectedDeviceId]
-  );
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+
     const loadHistory = async () => {
-      if (!selectedDeviceId) { setHistory([]); return; }
+      if (!selectedDeviceId) {
+        setHistory([]);
+        return;
+      }
+
       try {
         setLoadingHistory(true);
         const points = await fetchHistory(selectedDeviceId, historyRange);
-        if (!cancelled) setHistory(points);
+        if (!cancelled) {
+          setHistory(points);
+          setError(null);
+        }
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message :
-              locale === "vi" ? "Không tải được lịch sử." : "Failed to load history."
-          );
+          setError(err instanceof Error ? err.message : "Failed to load history.");
         }
       } finally {
         if (!cancelled) setLoadingHistory(false);
       }
     };
-    loadHistory();
-    return () => { cancelled = true; };
-  }, [locale, selectedDeviceId, historyRange]);
 
-  // Cancel pick when device changes
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [historyRange, selectedDeviceId]);
+
   useEffect(() => {
     setPickMode("idle");
     setPendingPick(null);
@@ -137,9 +158,12 @@ export function App() {
   const handleRename = async (deviceId: string, nextName: string) => {
     const trimmed = nextName.trim();
     if (!trimmed) return;
+
     const updatedName = await renameDevice(deviceId, trimmed);
     setDevices((prev) =>
-      prev.map((d) => d.deviceId === deviceId ? { ...d, deviceName: updatedName } : d)
+      prev.map((device) =>
+        device.deviceId === deviceId ? { ...device, deviceName: updatedName } : device,
+      ),
     );
   };
 
@@ -147,56 +171,54 @@ export function App() {
     const current = await fetchDeviceLocation(deviceId);
     setDevices((prev) =>
       prev.map((device) =>
-        device.deviceId === deviceId ? { ...device, ...current } : device
-      )
+        device.deviceId === deviceId ? { ...device, ...current } : device,
+      ),
     );
     setLastUpdatedAt(Date.now());
   };
 
-  /** When user clicks the map in pick mode */
   const handleMapClick = (lat: number, lng: number) => {
     setPendingPick({ lat, lng });
-    setPickMode("idle"); // auto-exit pick mode after pick
+    setPickMode("idle");
+    setSidebarSection("home");
+    setSidebarCollapsed(false);
   };
 
-  /** When home is saved, update local device state optimistically */
   const handleHomeSaved = (homeLat: number, homeLng: number, distanceToHomeM: number) => {
     setPendingPick(null);
     setDraftHome(null);
     setPickMode("idle");
     setDevices((prev) =>
-      prev.map((d) =>
-        d.deviceId === selectedDeviceId
-          ? { ...d, homeSet: true, homeLat, homeLng, distanceToHomeM }
-          : d
-      )
+      prev.map((device) =>
+        device.deviceId === selectedDeviceId
+          ? { ...device, distanceToHomeM, homeLat, homeLng, homeSet: true }
+          : device,
+      ),
     );
   };
 
-  /** When home is cleared */
   const handleHomeCleared = () => {
     setPendingPick(null);
     setDraftHome(null);
     setPickMode("idle");
     setDevices((prev) =>
-      prev.map((d) =>
-        d.deviceId === selectedDeviceId
+      prev.map((device) =>
+        device.deviceId === selectedDeviceId
           ? {
-              ...d,
-              homeSet: false,
-              homeLat: undefined,
-              homeLng: undefined,
-              distanceToHomeM: -1,
-              geoEnabled: false,
-              geoRadiusM: 0,
-              insideGeofence: false,
-            }
-          : d
-      )
+            ...device,
+            distanceToHomeM: -1,
+            geoEnabled: false,
+            geoRadiusM: 0,
+            homeLat: undefined,
+            homeLng: undefined,
+            homeSet: false,
+            insideGeofence: false,
+          }
+          : device,
+      ),
     );
   };
 
-  const onlineCount = devices.filter((d) => d.online).length;
   const visibleDraftHome = useMemo(() => {
     if (!draftHome) return null;
     if (
@@ -211,233 +233,328 @@ export function App() {
     return draftHome;
   }, [draftHome, selectedDevice]);
 
+  const placeTabs = [
+    { id: "overview" as const, label: "Tổng quan" },
+    { id: "home" as const, label: "Nhà riêng" },
+  ];
+
   return (
-    <>
-      {/* ── TOP NAVBAR ─────────────────────────────────────────────── */}
-      <nav className="navbar">
-        <div className="navbar__brand">
-          <div className="navbar__logo">N</div>
-          <div className="navbar__title">NEO10</div>
-        </div>
-
-        <div className="navbar__sep" />
-
-        <div className="navbar__center">
-          <button className="navbar__nav-item is-active" type="button">
-            <span>⬡</span> {copy.liveMap}
+    <div className={`gmaps-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}>
+      <aside className={`gmaps-sidebar ${sidebarCollapsed ? "is-collapsed" : ""}`}>
+        <div className="gmaps-sidebar__top">
+          <button
+            className="gmaps-sidebar__icon-button"
+            type="button"
+            aria-label={sidebarCollapsed ? "Mở thanh bên" : "Thu gọn thanh bên"}
+            onClick={() => setSidebarCollapsed((current) => !current)}
+          >
+            <AppIcon name="menu" size={20} />
+          </button>
+          <button
+            className={`gmaps-sidebar__menu-item ${sidebarSection === "saved" ? "is-active" : ""}`}
+            onClick={() => {
+              setSidebarSection("saved");
+              setSidebarCollapsed(false);
+            }}
+            type="button"
+          >
+            <AppIcon name="device" size={24} />
+          </button>
+          <button
+            className={`gmaps-sidebar__menu-item ${sidebarSection === "home" ? "is-active" : ""}`}
+            onClick={() => {
+              setSidebarSection("home");
+              setSidebarCollapsed(false);
+            }}
+            type="button"
+          >
+            <AppIcon name="home" size={24} />
+          </button>
+          <button
+            className={`gmaps-sidebar__menu-item ${sidebarSection === "recent" ? "is-active" : ""}`}
+            onClick={() => {
+              setSidebarSection("recent");
+              setSidebarCollapsed(false);
+            }}
+            type="button"
+          >
+            <AppIcon name="recent" size={24} />
           </button>
         </div>
 
-        <div className="navbar__right">
-          {lastUpdatedAt ? (
-            <div className="refresh-badge">
-              <span className="refresh-badge__dot" />
-              {formatTimestamp(lastUpdatedAt, locale)}
-            </div>
-          ) : null}
+        <div className="gmaps-sidebar__list gmaps-sidebar__list--sheet">
+          {!sidebarCollapsed ? (
+            <section className="place-sheet place-sheet--sidebar">
+              {sidebarSection === "saved" || sidebarSection === "home" ? (
+                <>
+                  <div className="place-sheet__header">
+                    <div className="place-sheet__header-row">
+                      <div>
+                        <div className="place-sheet__headline">
+                          {selectedDevice?.deviceName ?? "Tracker 0CDADC"}
+                        </div>
+                        <div className="place-sheet__subline">
+                          {lastUpdatedAt
+                            ? `Cập nhật ${formatTimestamp(lastUpdatedAt, locale)}`
+                            : "Đại lộ Tự Do"}
+                        </div>
+                      </div>
+                      <span className="maps-info-badge">
+                        {onlineCount}/{devices.length} online
+                      </span>
+                    </div>
 
-          <div className="toggle-group" style={{ width: "auto" }}>
+                    {devices.length > 1 ? (
+                      <label className="place-sheet__device-row">
+                        <span>Thiết bị</span>
+                        <select
+                          className="maps-select"
+                          value={selectedDeviceId ?? ""}
+                          onChange={(event) => setSelectedDeviceId(event.target.value || null)}
+                        >
+                          {devices.map((device) => (
+                            <option key={device.deviceId} value={device.deviceId}>
+                              {device.deviceName || device.deviceId}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
+
+                  <div className="place-sheet__content">
+                    {error ? <div className="maps-inline-alert maps-inline-alert--error">{error}</div> : null}
+
+                    {sidebarSection === "saved" ? (
+                      <DeviceDetails
+                        copy={copy}
+                        device={selectedDevice}
+                        loading={loadingDevices}
+                        onFetchCurrentLocation={handleFetchCurrentLocation}
+                        onRename={handleRename}
+                      />
+                    ) : null}
+
+                    {sidebarSection === "home" ? (
+                      <HomePanel
+                        copy={copy}
+                        device={selectedDevice}
+                        onCancelPick={() => setPickMode("idle")}
+                        onDraftChange={setDraftHome}
+                        onHomeCleared={handleHomeCleared}
+                        onHomeSaved={handleHomeSaved}
+                        onStartPick={() => setPickMode("picking")}
+                        pendingPick={pendingPick}
+                        pickMode={pickMode}
+                      />
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="place-sheet__header">
+                    <div className="place-sheet__header-row">
+                      <div>
+                        <div className="place-sheet__headline">Lịch sử di chuyển của {selectedDevice?.deviceName ?? "thiết bị đã chọn"}</div>
+                      </div>
+                      <span className="maps-info-badge">{history.length} điểm</span>
+                    </div>
+                  </div>
+
+                  <div className="place-sheet__range-row place-sheet__range-row--history">
+                    {RANGE_OPTIONS.map((range) => (
+                      <button
+                        key={range}
+                        className={`place-sheet__range-chip ${historyRange === range ? "is-active" : ""}`}
+                        onClick={() => setHistoryRange(range)}
+                        type="button"
+                      >
+                        {copy.rangeLabels[range]}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="place-sheet__content">
+                    {error ? <div className="maps-inline-alert maps-inline-alert--error">{error}</div> : null}
+                    <HistoryTimeline
+                      copy={copy}
+                      loading={loadingHistory}
+                      locale={locale}
+                      points={history}
+                      selectedDeviceName={selectedDevice?.deviceName ?? null}
+                    />
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
+        </div>
+
+        <div className="gmaps-sidebar__bottom">
+          <div className="gmaps-sidebar__tool-row">
             <button
-              className={locale === "vi" ? "toggle-button is-active" : "toggle-button"}
-              onClick={() => setLocale("vi")} type="button" title={copy.vietnameseLabel}
-            >VI</button>
+              className="gmaps-sidebar__tool-button"
+              onClick={() => setLocale(locale === "vi" ? "en" : "vi")}
+              type="button"
+            >
+              {locale === "vi" ? "EN" : "VI"}
+            </button>
             <button
-              className={locale === "en" ? "toggle-button is-active" : "toggle-button"}
-              onClick={() => setLocale("en")} type="button" title={copy.englishLabel}
-            >EN</button>
+              className="gmaps-sidebar__tool-button"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              type="button"
+            >
+              {theme === "dark" ? "Sáng" : "Tối"}
+            </button>
           </div>
+        </div>
+      </aside>
+
+      <main className="gmaps-main">
+        <div className="gmaps-topbar">
+          <div className="gmaps-search-row">
+            <div className="gmaps-searchbox">
+              <AppIcon name="search" size={18} />
+              <input
+                className="gmaps-searchbox__input"
+                placeholder="Tìm kiếm trên Google Maps"
+                readOnly
+                value=""
+              />
+              <button className="gmaps-searchbox__action" type="button" aria-label="Directions">
+                <AppIcon name="directions" size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="gmaps-profile-row">
+
+            <button
+              className={`gmaps-map-chip ${showHistory ? "is-active" : ""}`}
+              onClick={() => {
+                setShowHistory((current) => !current);
+                setSidebarSection("recent");
+                setSidebarCollapsed(false);
+              }}
+              type="button"
+            >
+              <AppIcon name="history" size={15} />
+              <span>{copy.historyToggle}</span>
+            </button>
+            <button
+              className={`gmaps-map-chip ${routeMode !== "off" ? "is-active" : ""}`}
+              onClick={() => setRouteMode((current) => cycleRouteMode(current))}
+              type="button"
+            >
+              <AppIcon name="route" size={15} />
+              <span>
+                {routeMode === "off"
+                  ? copy.routeModeOff
+                  : routeMode === "selected"
+                    ? copy.routeModeSelected
+                    : copy.routeModeAll}
+              </span>
+            </button>
+
+            <button className="gmaps-top-icon" type="button" aria-label="Apps">
+              <AppIcon name="apps" size={18} />
+            </button>
+            <button className="gmaps-avatar" type="button" aria-label="Profile">
+              <span className="gmaps-avatar__face" />
+            </button>
+          </div>
+        </div>
+
+        <section className="gmaps-map-stage">
+          <TrackerMap
+            devices={devices}
+            draftHome={visibleDraftHome}
+            draftPendingLabel={locale === "vi" ? "Chờ lưu" : "Pending save"}
+            history={history}
+            homeLabel={copy.homeLabel}
+            locale={locale}
+            onMapClick={handleMapClick}
+            onControllerReady={setMapController}
+            pickMode={pickMode}
+            routeMode={routeMode}
+            selectedDeviceId={selectedDeviceId}
+            showHistory={showHistory}
+            mapLayer={mapLayer}
+            theme={theme}
+          />
+
 
           <button
-            className="icon-btn"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className={`gmaps-layer-card ${mapLayer === "satellite" ? "is-satellite" : "is-roadmap"}`}
+            onClick={() =>
+              setMapLayer((current) => (current === "roadmap" ? "satellite" : "roadmap"))
+            }
             type="button"
-            title={theme === "dark" ? copy.lightLabel : copy.darkLabel}
           >
-            {theme === "dark" ? "☀" : "◑"}
+            <div className="gmaps-layer-card__thumb" />
+            <div className="gmaps-layer-card__info">
+              <AppIcon name="layers" size={15} />
+              <span>Lớp</span>
+            </div>
           </button>
-        </div>
-      </nav>
 
-      {/* ── SHELL ──────────────────────────────────────────────────── */}
-      <div className="shell">
+          <div className="gmaps-map-controls">
+            <button
+              className="gmaps-map-control"
+              onClick={() => mapController?.focusSelected()}
+              type="button"
+              title="Location"
+            >
+              <AppIcon name="location" size={18} />
+            </button>
+            <button
+              className="gmaps-map-control"
+              onClick={() => mapController?.zoomIn()}
+              type="button"
+              title="Zoom in"
+            >
+              <AppIcon name="plus" size={18} />
+            </button>
+            <button
+              className="gmaps-map-control"
+              onClick={() => mapController?.zoomOut()}
+              type="button"
+              title="Zoom out"
+            >
+              <AppIcon name="minus" size={18} />
+            </button>
+            <button
+              className="gmaps-map-control gmaps-map-control--pegman"
+              type="button"
+              title="Street View"
+            >
+              <AppIcon name="pegman" size={18} />
+            </button>
+            <button className="gmaps-map-control" type="button" title="3D">
+              <AppIcon name="threeD" size={18} />
+            </button>
+            <button className="gmaps-map-control" type="button" title="Rotate">
+              <AppIcon name="rotate" size={18} />
+            </button>
+          </div>
 
-        {/* ── SIDEBAR ──────────────────────────────────────────────── */}
-        <aside className="shell__sidebar">
-
-          {/* Fleet overview */}
-          <div className="sidebar-section">
-            <div className="sidebar-label">{copy.appEyebrow}</div>
-            <div className="panel" style={{ padding: "14px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: "1.65rem", fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 1 }}>
-                    {devices.length}
-                  </div>
-                  <div className="muted" style={{ marginTop: 2 }}>{copy.appDescription.split(",")[0]}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--cyan-400)", lineHeight: 1, letterSpacing: "-0.04em" }}>
-                    {onlineCount}
-                  </div>
-                  <div className="muted" style={{ marginTop: 2 }}>{copy.online}</div>
-                </div>
-              </div>
+          <div className="gmaps-attribution">
+            <div className="gmaps-attribution__brand">Google</div>
+            <div className="gmaps-attribution__text">
+              <span>Hình ảnh ©2026, Dữ liệu bản đồ ©2026</span>
+              <span>Toàn cầu</span>
+              <span>Điều khoản</span>
+              <span>Quyền riêng tư</span>
+              <span>Gửi ý kiến phản hồi về sản phẩm</span>
             </div>
           </div>
 
-          <div className="divider" />
-
-          {/* Time range */}
-          <div className="sidebar-section">
-            <div className="sidebar-label">{copy.movementHistory}</div>
-            <div className="range-picker">
-              {rangeOptions.map((opt) => (
-                <button
-                  key={opt}
-                  className={opt === historyRange ? "range-pill is-active" : "range-pill"}
-                  onClick={() => setHistoryRange(opt)} type="button"
-                >
-                  {copy.rangeLabels[opt]}
-                </button>
-              ))}
-            </div>
+          <div className="gmaps-scale-bar">
+            <span className="gmaps-scale-bar__line" />
+            <span>10 mét</span>
           </div>
-
-          <div className="divider" />
-
-          {/* Device list */}
-          <div className="sidebar-section" style={{ flex: 1 }}>
-            <div className="sidebar-label">{copy.selectedDevice} ({devices.length})</div>
-            <DeviceSidebar
-              copy={copy} devices={devices} locale={locale}
-              loading={loadingDevices} selectedDeviceId={selectedDeviceId}
-              onSelect={setSelectedDeviceId}
-            />
-            {!loadingDevices && !error && !devices.length && (
-              <p className="panel-note">{copy.noDevicesHint}</p>
-            )}
-          </div>
-
-          {/* Footer Credits */}
-          <div className="sidebar-footer">
-            <p>© {new Date().getFullYear()} <strong>Vũ Đăng Thanh</strong>. All rights reserved.</p>
-            <p>Leader: <strong>TA DIY SOLUTION</strong></p>
-          </div>
-
-        </aside>
-
-        {/* ── MAIN ─────────────────────────────────────────────────── */}
-        <main className="shell__main">
-
-          {/* Hero header */}
-          <section className="hero-card">
-            <div className="hero-card__top">
-              <div>
-                <p className="eyebrow">{copy.liveMap}</p>
-                <h2>{copy.liveMapTitle}</h2>
-                <p className="muted" style={{ marginTop: 6 }}>{copy.liveMapDescription}</p>
-              </div>
-              <div className="hero-meta">
-                {devices.length > 0 && (
-                  <span className="stat-badge">◉ {onlineCount}/{devices.length} {copy.online}</span>
-                )}
-                {lastUpdatedAt && (
-                  <span className="hero-meta__pill">↻ {copy.lastUpdated}: {formatTimestamp(lastUpdatedAt, locale)}</span>
-                )}
-                {/* Display mode toggle */}
-                {devices.length > 0 && (
-                  <div className="map-mode-toggle">
-                    <button
-                      className={showHistory ? "map-mode-btn is-active" : "map-mode-btn"}
-                      type="button"
-                      onClick={() => setShowHistory(p => !p)}
-                    >
-                      🛤 {copy.historyToggle}
-                    </button>
-                    <div className="map-mode-divider" />
-                    <select
-                      className="map-mode-select"
-                      value={routeMode}
-                      onChange={(e) => setRouteMode(e.target.value as any)}
-                    >
-                      <option value="off">🛑 {copy.routeModeOff}</option>
-                      <option value="selected">🎯 {copy.routeModeSelected}</option>
-                      <option value="all">🌐 {copy.routeModeAll}</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {error && <div className="error-banner">{error}</div>}
-
-          {/* Pick-mode floating hint bar */}
-          {pickMode === "picking" && (
-            <div className="pick-mode-bar">
-              <span className="pick-hint__dot" style={{ width: 8, height: 8 }} />
-              <span>{copy.pickOnMapHint}</span>
-              <button
-                className="pick-cancel-btn"
-                type="button"
-                onClick={() => setPickMode("idle")}
-              >✕ Cancel</button>
-            </div>
-          )}
-
-          {/* Dashboard grid */}
-          <div className="dashboard-grid">
-
-            {/* Map */}
-            <TrackerMap
-              devices={devices}
-              history={history}
-              homeLabel={copy.homeLabel}
-              draftPendingLabel={locale === "vi" ? "Ch\u1edd l\u01b0u" : "Pending save"}
-              selectedDeviceId={selectedDeviceId}
-              theme={theme}
-              pickMode={pickMode}
-              routeMode={routeMode}
-              showHistory={showHistory}
-              draftHome={visibleDraftHome}
-              onMapClick={handleMapClick}
-            />
-
-            {/* Right stack */}
-            <div className="dashboard-stack">
-              <DeviceDetails
-                copy={copy}
-                device={selectedDevice}
-                loading={loadingDevices}
-                onRename={handleRename}
-                onFetchCurrentLocation={handleFetchCurrentLocation}
-              />
-
-              {/* Home Panel */}
-              <HomePanel
-                copy={copy}
-                device={selectedDevice}
-                pickMode={pickMode}
-                pendingPick={pendingPick}
-                onStartPick={() => setPickMode("picking")}
-                onCancelPick={() => setPickMode("idle")}
-                onHomeSaved={handleHomeSaved}
-                onHomeCleared={handleHomeCleared}
-                onDraftChange={setDraftHome}
-              />
-
-              <HistoryTimeline
-                copy={copy}
-                locale={locale}
-                points={history}
-                loading={loadingHistory}
-                selectedDeviceName={selectedDevice?.deviceName ?? null}
-              />
-            </div>
-          </div>
-
-        </main>
-      </div>
-    </>
+        </section>
+      </main>
+    </div>
   );
 }

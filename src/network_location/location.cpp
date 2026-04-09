@@ -9,6 +9,9 @@
 
 static constexpr unsigned long NETLOC_RECHECK_WHEN_GPS_FRESH_MS = 1800000UL;
 static constexpr unsigned long NETLOC_REFRESH_NO_GPS_MS = 10800000UL;
+static constexpr unsigned long NETLOC_BOOT_RETRY_MS = 15000UL;
+static constexpr unsigned long NETLOC_FAIL_RETRY_MS = 60000UL;
+static constexpr unsigned long NETLOC_READY_SETTLE_MS = 15000UL;
 static constexpr int NETLOC_MAX_WIFI_APS = 10;
 static constexpr unsigned long WIFI_SCAN_CACHE_MS = 1800000UL;
 static constexpr unsigned long WIFI_GEO_TRANSPORT_BACKOFF_MS = 1800000UL;
@@ -22,6 +25,33 @@ static unsigned long WIFI_GEO_TRANSPORT_BLOCK_UNTIL_MS = 0;
 static bool RELAY_PING_TESTED = false;
 static bool RELAY_PING_OK = false;
 static String RELAY_PING_BASE = "";
+static unsigned long LAST_SIM_DATA_NOT_READY_LOG_MS = 0;
+static unsigned long LAST_RELAY_MISSING_LOG_MS = 0;
+static constexpr unsigned long NETLOC_LOG_THROTTLE_MS = 30000UL;
+
+static void logNetlocThrottled(const char *msg, unsigned long *lastLogMs) {
+  if (!lastLogMs)
+    return;
+  const unsigned long nowMs = millis();
+  if (*lastLogMs == 0 || (nowMs - *lastLogMs) >= NETLOC_LOG_THROTTLE_MS) {
+    *lastLogMs = nowMs;
+    logLine(msg);
+  }
+}
+
+static bool isSimSignalUsableForNetloc() {
+  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered())
+    return false;
+
+  const int csq = sim_readCSQ();
+  return csq >= 0 && csq <= 31;
+}
+
+static bool isBootNetlocTransportReady() {
+  if (WiFi.status() == WL_CONNECTED)
+    return true;
+  return isSimSignalUsableForNetloc();
+}
 
 static String urlEncode(const String &input) {
   String out;
@@ -436,7 +466,8 @@ static bool doHybridGeolocationViaSIMApi() {
     return false;
   }
   if (!SIM_hasCapability(SIM_CAP_DATA_OK)) {
-    logLine("[NETLOC] SIM data not ready, skip hybrid geoloc");
+    logNetlocThrottled("[NETLOC] SIM data not ready, skip hybrid geoloc",
+                       &LAST_SIM_DATA_NOT_READY_LOG_MS);
     return false;
   }
 
@@ -461,7 +492,8 @@ static bool doHybridGeolocationViaSIMApi() {
   String relayBase = String(cfg.simNetlocRelayUrl);
   relayBase.trim();
   if (relayBase.length() < 8) {
-    logLine("[NETLOC] SIM relay URL missing, skip hybrid geoloc");
+    logNetlocThrottled("[NETLOC] SIM relay URL missing, skip hybrid geoloc",
+                       &LAST_RELAY_MISSING_LOG_MS);
     return false;
   }
   ensureRelayPingTested(relayBase);
@@ -522,7 +554,8 @@ static bool doCellGeolocationViaSIMApi() {
     return false;
   }
   if (!SIM_hasCapability(SIM_CAP_DATA_OK)) {
-    logLine("[NETLOC] SIM data not ready, skip internet geoloc");
+    logNetlocThrottled("[NETLOC] SIM data not ready, skip internet geoloc",
+                       &LAST_SIM_DATA_NOT_READY_LOG_MS);
     return false;
   }
 
@@ -542,7 +575,9 @@ static bool doCellGeolocationViaSIMApi() {
   String relayBase = String(cfg.simNetlocRelayUrl);
   relayBase.trim();
   if (relayBase.length() < 8) {
-    logLine("[NETLOC] SIM relay URL missing, skip SIM internet geoloc");
+    logNetlocThrottled(
+        "[NETLOC] SIM relay URL missing, skip SIM internet geoloc",
+        &LAST_RELAY_MISSING_LOG_MS);
     return false;
   }
   ensureRelayPingTested(relayBase);
@@ -596,16 +631,14 @@ static bool doCellGeolocationCLBS() {
   if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK))
     return false;
 
-  // Lấy quyền điều khiển SIM
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  // Gửi lệnh lấy vị trí tương đối từ trạm phát sóng
-  simSerial.println("AT+CLBS=1,1");
+  simSerial.println("AT+CLBS=1");
 
   String resp = "";
   unsigned long t0 = millis();
-  // Chờ phản hồi từ module SIM (tối đa 10s)
+
   while (millis() - t0 < 10000) {
     while (simSerial.available()) {
       resp += (char)simSerial.read();
@@ -618,24 +651,52 @@ static bool doCellGeolocationCLBS() {
   if (simMutex)
     xSemaphoreGive(simMutex);
 
-  // Phân tích phản hồi: +CLBS: <status>,<lat>,<lng>,<precision>
-  // Ví dụ: +CLBS: 0,10.935262,106.737457,550
-  int idx = resp.indexOf("+CLBS: 0,");
-  if (idx >= 0) {
-    idx += 9; // Bỏ qua phần "+CLBS: 0,"
-    int c1 = resp.indexOf(',', idx);
-    double lat = resp.substring(idx, c1).toDouble();
-    int c2 = resp.indexOf(',', c1 + 1);
-    double lng = resp.substring(c1 + 1, c2).toDouble();
-    float accuracy = resp.substring(c2 + 1).toFloat();
-
-    // Cập nhật vào Telemetry để các hàm khác có thể sử dụng
-    telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
-    return true;
+  // ===== PARSE =====
+  int idx = resp.indexOf("+CLBS:");
+  if (idx < 0) {
+    logLine("[NETLOC] No CLBS response");
+    return false;
   }
 
-  logLine("[NETLOC] LBS Scan failed hoặc không có sóng");
-  return false;
+  // Lấy dòng +CLBS
+  int endLine = resp.indexOf('\n', idx);
+  String line = resp.substring(idx, endLine);
+  line.replace("\r", "");
+  line.trim();
+
+  // +CLBS: 0,lat,lng,acc,...
+  int firstComma = line.indexOf(',');
+  if (firstComma < 0)
+    return false;
+
+  int ret = line.substring(7, firstComma).toInt();
+  if (ret != 0) {
+    logPrintf("[NETLOC] CLBS error code: %d", ret);
+    return false;
+  }
+
+  int c1 = firstComma;
+  int c2 = line.indexOf(',', c1 + 1);
+  int c3 = line.indexOf(',', c2 + 1);
+
+  if (c2 < 0 || c3 < 0)
+    return false;
+
+  double lat = line.substring(c1 + 1, c2).toDouble();
+  double lng = line.substring(c2 + 1, c3).toDouble();
+
+  // accuracy có thể là field cuối hoặc còn date/time phía sau
+  int c4 = line.indexOf(',', c3 + 1);
+  float accuracy;
+
+  if (c4 > 0)
+    accuracy = line.substring(c3 + 1, c4).toFloat();
+  else
+    accuracy = line.substring(c3 + 1).toFloat();
+
+  telemetrySetNetworkLocation(lat, lng, accuracy, LOC_CELL_GEO);
+
+  return true;
 }
 
 // ============================================================
@@ -652,8 +713,8 @@ static bool doCellGeolocationCLBS() {
 bool acquireNetworkLocationNow() {
   TelemetrySnapshot telem = {};
   getTelemetrySnapshot(&telem);
-  if (telem.sosActive)
-    return false;
+  // if (telem.sosActive)
+  //   return false;
 
   // 1. Thử WiFi Geolocation trước (độ chính xác cao nhất ~20-50m)
   if (WiFi.status() == WL_CONNECTED) {
@@ -662,12 +723,15 @@ bool acquireNetworkLocationNow() {
   }
 
   // 2. Thử Hybrid qua API (Cell + WiFi BSSID)
-  if (doHybridGeolocationViaSIMApi())
+  if (doCellGeolocationCLBS())
     return true;
 
   // 3. KÍCH HOẠT LẠI: Dùng trực tiếp trạm phát sóng (LBS) của nhà mạng qua
   // AT+CLBS Đây là cách bạn muốn (vị trí tương đối khi ko có internet/GPS)
-  if (doCellGeolocationCLBS())
+  if (doHybridGeolocationViaSIMApi())
+    return true;
+
+  if (doCellGeolocationViaSIMApi())
     return true;
 
   logLine("[NETLOC] Tất cả các phương thức lấy vị trí mạng đều thất bại");
@@ -679,6 +743,7 @@ void networkLocationTask(void *pvParameters) {
   vTaskDelay(pdMS_TO_TICKS(8000));
 
   logLine("[NETLOC] Task started");
+  unsigned long transportReadySinceMs = 0;
 
   while (true) {
     ConfigSnapshot cfg = {};
@@ -700,6 +765,30 @@ void networkLocationTask(void *pvParameters) {
 
     if (!telem.assistReady && (millis() - telem.bootMs) < 45000UL) {
       logLine("[NETLOC] Assist still in progress, deferring network location");
+      vTaskDelay(pdMS_TO_TICKS(5000));
+      continue;
+    }
+
+    if (!isBootNetlocTransportReady()) {
+      transportReadySinceMs = 0;
+      logNetlocThrottled(
+          "[NETLOC] Waiting for SIM/WiFi transport before startup network location",
+          &LAST_SIM_DATA_NOT_READY_LOG_MS);
+      vTaskDelay(pdMS_TO_TICKS(NETLOC_BOOT_RETRY_MS));
+      continue;
+    }
+
+    if (transportReadySinceMs == 0) {
+      transportReadySinceMs = millis();
+      logLine("[NETLOC] Transport is ready, waiting a bit before first LBS scan");
+      vTaskDelay(pdMS_TO_TICKS(5000));
+      continue;
+    }
+
+    const unsigned long transportStableMs = millis() - transportReadySinceMs;
+    if (!telem.networkLocReady && transportStableMs < NETLOC_READY_SETTLE_MS) {
+      logPrintf("[NETLOC] Waiting transport settle %lus/%lus before LBS",
+                transportStableMs / 1000UL, NETLOC_READY_SETTLE_MS / 1000UL);
       vTaskDelay(pdMS_TO_TICKS(5000));
       continue;
     }
@@ -739,11 +828,16 @@ void networkLocationTask(void *pvParameters) {
                                t->tm_hour, t->tm_min, t->tm_sec, 1000);
         }
       }
+      vTaskDelay(pdMS_TO_TICKS(NETLOC_REFRESH_NO_GPS_MS));
+      continue;
     } else {
       logLine("[NETLOC] All network location methods failed");
+      const bool needsFastRetry =
+          !telem.networkLocReady || (millis() - telem.bootMs) < 180000UL;
+      vTaskDelay(pdMS_TO_TICKS(needsFastRetry ? NETLOC_FAIL_RETRY_MS
+                                              : NETLOC_REFRESH_NO_GPS_MS));
+      continue;
     }
-
-    vTaskDelay(pdMS_TO_TICKS(NETLOC_REFRESH_NO_GPS_MS));
   }
 }
 

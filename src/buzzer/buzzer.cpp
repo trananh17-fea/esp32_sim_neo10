@@ -50,44 +50,44 @@ struct MorsePattern {
 };
 
 void buzzer_sos() {
-  // Định nghĩa mô hình SOS: 3 ngắn (100ms), 3 dài (400ms), 3 ngắn (100ms)
-  const MorsePattern sos[] = {{100, 3}, {400, 3}, {100, 3}};
-  const int gapBetweenLetters = 200; // Nghỉ giữa các chữ cái (S, O, S)
+  //   // Định nghĩa mô hình SOS: 3 ngắn (100ms), 3 dài (400ms), 3 ngắn (100ms)
+  //   const MorsePattern sos[] = {{100, 3}, {400, 3}, {100, 3}};
+  //   const int gapBetweenLetters = 200; // Nghỉ giữa các chữ cái (S, O, S)
 
-  while (buzzerActive) {
-    for (int i = 0; i < 3; i++) { // Duyệt qua S, O, S
-      for (int j = 0; j < sos[i].count; j++) {
-        if (!buzzerActive)
-          goto stop; // Thoát ngay lập tức nếu bị hủy
+  //   while (buzzerActive) {
+  //     for (int i = 0; i < 3; i++) { // Duyệt qua S, O, S
+  //       for (int j = 0; j < sos[i].count; j++) {
+  //         if (!buzzerActive)
+  //           goto stop; // Thoát ngay lập tức nếu bị hủy
 
-        // Thực hiện bíp
-        buzzer_on(BUZZER_FREQ);
+  //         // Thực hiện bíp
+  //         buzzer_on(BUZZER_FREQ);
 
-        // Thay vì delay() cứng, chia nhỏ thời gian để check cờ hủy
-        int remaining = sos[i].duration;
-        while (remaining > 0 && buzzerActive) {
-          int step = (remaining > 50) ? 50 : remaining;
-          vTaskDelay(pdMS_TO_TICKS(step));
-          remaining -= step;
-        }
+  //         // Thay vì delay() cứng, chia nhỏ thời gian để check cờ hủy
+  //         int remaining = sos[i].duration;
+  //         while (remaining > 0 && buzzerActive) {
+  //           int step = (remaining > 50) ? 50 : remaining;
+  //           vTaskDelay(pdMS_TO_TICKS(step));
+  //           remaining -= step;
+  //         }
 
-        buzzer_off();
-        vTaskDelay(pdMS_TO_TICKS(
-            100)); // Khoảng nghỉ giữa các nhịp bíp trong cùng 1 chữ
-      }
+  //         buzzer_off();
+  //         vTaskDelay(pdMS_TO_TICKS(
+  //             100)); // Khoảng nghỉ giữa các nhịp bíp trong cùng 1 chữ
+  //       }
 
-      if (!buzzerActive)
-        goto stop;
-      vTaskDelay(pdMS_TO_TICKS(gapBetweenLetters)); // Nghỉ giữa S-O, O-S
-    }
+  //       if (!buzzerActive)
+  //         goto stop;
+  //       vTaskDelay(pdMS_TO_TICKS(gapBetweenLetters)); // Nghỉ giữa S-O, O-S
+  //     }
 
-    // Nghỉ 1 giây sau khi xong một chu kỳ SOS (chia nhỏ để nhạy lệnh tắt)
-    for (int k = 0; k < 10 && buzzerActive; k++) {
-      vTaskDelay(pdMS_TO_TICKS(100));
-    }
-  }
+  //     // Nghỉ 1 giây sau khi xong một chu kỳ SOS (chia nhỏ để nhạy lệnh tắt)
+  //     for (int k = 0; k < 10 && buzzerActive; k++) {
+  //       vTaskDelay(pdMS_TO_TICKS(100));
+  //     }
+  //   }
 
-stop:
-  buzzer_off();
-  Serial.println("[Buzzer] SOS Stopped");
+  // stop:
+  //   buzzer_off();
+  //   Serial.println("[Buzzer] SOS Stopped");
 }

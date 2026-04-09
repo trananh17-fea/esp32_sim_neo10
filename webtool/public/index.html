@@ -4,8 +4,87 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NEO10 Device Tracker</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        font-family: Roboto, "Segoe UI", sans-serif;
+        background: #f8f9fa;
+      }
+
+      #root {
+        min-height: 100%;
+      }
+
+      #boot-status {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        color: #202124;
+        background: #f8f9fa;
+        z-index: 999999;
+      }
+
+      #boot-status__card {
+        width: min(720px, 100%);
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #dadce0;
+        border-radius: 16px;
+        box-shadow: 0 2px 12px rgba(60, 64, 67, 0.12);
+      }
+
+      #boot-status__title {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+
+      #boot-status__text {
+        margin: 0;
+        color: #5f6368;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      body[data-app-mounted="true"] #boot-status {
+        display: none;
+      }
+    </style>
+    <script>
+      window.addEventListener("error", function (event) {
+        var text = document.getElementById("boot-status__text");
+        if (text) {
+          text.textContent =
+            "Loi JavaScript truoc khi giao dien render:\n" +
+            (event.message || "Unknown error");
+        }
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+        var text = document.getElementById("boot-status__text");
+        if (text) {
+          var message =
+            event.reason && event.reason.message
+              ? event.reason.message
+              : String(event.reason);
+          text.textContent =
+            "Promise bi reject truoc khi giao dien render:\n" + message;
+        }
+      });
+    </script>
   </head>
   <body>
+    <div id="boot-status">
+      <div id="boot-status__card">
+        <h1 id="boot-status__title">Ứng dụng đang khởi động</h1>
+        <p id="boot-status__text">
+          Nếu dòng này không biến mất, có nghĩa là bundle chưa mount được hoặc đã lỗi trước khi React render.
+        </p>
+      </div>
+    </div>
     <div id="root"></div>
   </body>
 </html>

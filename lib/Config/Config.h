@@ -42,10 +42,10 @@ const char *locationSourceName(LocationSource src);
 struct BestLocationResult {
   double lat;
   double lng;
-  float accuracyM;        // estimated accuracy in meters
+  float accuracyM; // estimated accuracy in meters
   LocationSource source;
-  unsigned long ageMs;    // how old is this fix (millis since obtained)
-  bool valid;             // true if we have any usable location
+  unsigned long ageMs; // how old is this fix (millis since obtained)
+  bool valid;          // true if we have any usable location
 };
 
 BestLocationResult getBestAvailableLocation();
@@ -71,6 +71,10 @@ struct ConfigSnapshot {
   bool simTrackingEnable;
   char wifiTrackingUrl[CONFIG_TRACKING_URL_LEN];
   char simTrackingUrl[CONFIG_TRACKING_URL_LEN];
+  unsigned long trackingCurrentMovingIntervalMs;
+  unsigned long trackingCurrentStationaryIntervalMs;
+  unsigned long trackingHistoryMovingIntervalMs;
+  unsigned long trackingHistoryStationaryIntervalMs;
   // --- Network location config ---
   bool netlocEnable;
   char netlocApiKey[CONFIG_NETLOC_KEY_LEN];
@@ -85,10 +89,13 @@ struct TelemetrySnapshot {
   uint8_t simCapabilityLevel;
   bool sosActive;
   bool sosCancelRequested;
+  bool batteryReady;
   int signal4G;
   int signalWiFi;
   int signalCsqRaw;
   int signalRssiRaw;
+  int batteryPercent;
+  float batteryVoltageV;
   unsigned long firstFixMs;
   unsigned long lastGpsUpdateMs; // millis() of most recent GPS position update
   unsigned long bootMs;
@@ -100,7 +107,7 @@ struct TelemetrySnapshot {
   double networkLocLat;
   double networkLocLng;
   float networkLocAccuracyM;
-  unsigned long networkLocAtMs;  // millis() when location was obtained
+  unsigned long networkLocAtMs; // millis() when location was obtained
   LocationSource networkLocSource;
 };
 
@@ -119,6 +126,7 @@ bool telemetryIsSosActive();
 bool telemetryIsSosCancellationRequested();
 void telemetrySetSignalLevels(int signal4G, int signalWiFi, int signalCsqRaw,
                               int signalRssiRaw);
+void telemetrySetBatteryStatus(bool ready, int percent, float voltageV);
 void telemetrySetBootMs(unsigned long bootMs);
 void telemetrySetTrackCodes(int wifiCode, int simCode);
 void telemetrySetTrackWifiCode(int wifiCode);
@@ -169,6 +177,10 @@ extern char ASSIST_TOKEN[128];
 extern bool SIM_TRACKING_ENABLE;
 extern char WIFI_TRACKING_URL[CONFIG_TRACKING_URL_LEN];
 extern char SIM_TRACKING_URL[CONFIG_TRACKING_URL_LEN];
+extern unsigned long TRACKING_CURRENT_MOVING_INTERVAL_MS;
+extern unsigned long TRACKING_CURRENT_STATIONARY_INTERVAL_MS;
+extern unsigned long TRACKING_HISTORY_MOVING_INTERVAL_MS;
+extern unsigned long TRACKING_HISTORY_STATIONARY_INTERVAL_MS;
 
 // --- Network location config ---
 extern bool NETLOC_ENABLE;
@@ -198,8 +210,6 @@ extern char PHONE[37];
 extern char SMS[256];
 
 // Thread-safe log helper
-static inline void serialLog(const char *line) {
-  logLine(line);
-}
+static inline void serialLog(const char *line) { logLine(line); }
 
 #endif
