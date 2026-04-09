@@ -69,7 +69,10 @@ export function App() {
   const [draftHome, setDraftHome] = useState<{ lat: number; lng: number } | null>(null);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("saved");
   const [mapController, setMapController] = useState<TrackerMapController | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 640;
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ name: string; lat: number; lng: number }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
