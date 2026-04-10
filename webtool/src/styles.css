@@ -482,6 +482,38 @@ input {
   display: flex;
   align-items: center;
   gap: 10px;
+  position: relative;
+}
+
+.gmaps-top-apps {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-2);
+  z-index: 520;
+}
+
+.gmaps-top-app-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--bg-soft);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+}
+
+.gmaps-top-app-button:hover {
+  background: var(--bg-muted);
 }
 
 .gmaps-top-icon {

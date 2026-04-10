@@ -75,6 +75,7 @@ export function App() {
     if (typeof window === "undefined") return false;
     return window.innerWidth <= 640;
   });
+  const [showTopApps, setShowTopApps] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ name: string; lat: number; lng: number }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -578,9 +579,30 @@ export function App() {
               </span>
             </button>
 
-            <button className="gmaps-top-icon" type="button" aria-label="Apps">
+            <button
+              className="gmaps-top-icon"
+              type="button"
+              aria-label="Apps"
+              onClick={() => setShowTopApps((current) => !current)}
+            >
               <AppIcon name="apps" size={18} />
             </button>
+            {showTopApps ? (
+              <div className="gmaps-top-apps">
+                <button className="gmaps-top-app-button" type="button" aria-label="App 1">
+                  <AppIcon name="home" size={18} />
+                </button>
+                <button className="gmaps-top-app-button" type="button" aria-label="App 2">
+                  <AppIcon name="route" size={18} />
+                </button>
+                <button className="gmaps-top-app-button" type="button" aria-label="App 3">
+                  <AppIcon name="location" size={18} />
+                </button>
+                <button className="gmaps-top-app-button" type="button" aria-label="App 4">
+                  <AppIcon name="search" size={18} />
+                </button>
+              </div>
+            ) : null}
             <button className="gmaps-avatar" type="button" aria-label="Profile">
               <span className="gmaps-avatar__face" />
             </button>
