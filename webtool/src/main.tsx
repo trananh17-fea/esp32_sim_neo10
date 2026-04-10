@@ -63,6 +63,26 @@ if (!rootElement) {
   throw new Error("Root element #root was not found.");
 }
 
+const svgIconUrl = new URL("./img/favicon.svg", import.meta.url).href;
+const pngIconUrl = new URL("./img/favicon.png", import.meta.url).href;
+const existingIcons = Array.from(document.querySelectorAll<HTMLLinkElement>(
+  'link[rel~="icon"], link[rel="apple-touch-icon"]'
+));
+existingIcons.forEach((icon) => icon.remove());
+
+const icon = document.createElement("link");
+icon.rel = "icon";
+icon.type = "image/svg+xml";
+icon.sizes = "any";
+icon.href = svgIconUrl;
+document.head.appendChild(icon);
+
+const appleIcon = document.createElement("link");
+appleIcon.rel = "apple-touch-icon";
+appleIcon.sizes = "180x180";
+appleIcon.href = pngIconUrl;
+document.head.appendChild(appleIcon);
+
 document.body.dataset.appMounted = "true";
 
 createRoot(rootElement).render(

@@ -22,6 +22,7 @@ import type {
   TrackerHistoryPoint,
 } from "../types/tracker";
 
+const logofullUrl = new URL("../img/logofull.png", import.meta.url).href;
 const REFRESH_INTERVAL_MS = 60000;
 const RANGE_OPTIONS: HistoryRange[] = ["24h", "3d", "7d"];
 
@@ -447,6 +448,7 @@ export function App() {
 
         <div className="gmaps-sidebar__bottom">
           <div className="gmaps-sidebar__tool-row">
+            <img className="gmaps-sidebar__logo-full" src={logofullUrl} alt="NEO10 logo" />
             <button
               className="gmaps-sidebar__tool-button"
               onClick={() => setLocale(locale === "vi" ? "en" : "vi")}
