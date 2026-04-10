@@ -240,11 +240,11 @@ input {
   align-items: center;
 }
 
-.gmaps-sidebar__logo-full {
-  height: 60px;
+
+.gmaps-scale-logo {
+  height: 50px;
   width: auto;
   object-fit: contain;
-  display: inline-block;
 }
 
 .gmaps-sidebar__tool-button {

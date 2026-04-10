@@ -448,7 +448,6 @@ export function App() {
 
         <div className="gmaps-sidebar__bottom">
           <div className="gmaps-sidebar__tool-row">
-            <img className="gmaps-sidebar__logo-full" src={logofullUrl} alt="NEO10 logo" />
             <button
               className="gmaps-sidebar__tool-button"
               onClick={() => setLocale(locale === "vi" ? "en" : "vi")}
@@ -665,6 +664,7 @@ export function App() {
               style={{ width: `${scaleBar.width}px` }}
             />
             <span>{scaleBar.label}</span>
+            <img className="gmaps-scale-logo" src={logofullUrl} alt="NEO10 logo" />
           </div>
         </section>
       </main>
