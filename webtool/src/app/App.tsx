@@ -70,7 +70,7 @@ export function App() {
   const [draftHome, setDraftHome] = useState<{ lat: number; lng: number } | null>(null);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("saved");
   const [mapController, setMapController] = useState<TrackerMapController | null>(null);
-  const [scaleBar, setScaleBar] = useState({ label: "10 mét", width: 54 });
+  const [scaleBar, setScaleBar] = useState({ label: locale === "vi" ? "10 mét" : "10 m", width: 54 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth <= 640;
@@ -295,8 +295,8 @@ export function App() {
   }, [draftHome, selectedDevice]);
 
   const placeTabs = [
-    { id: "overview" as const, label: "Tổng quan" },
-    { id: "home" as const, label: "Nhà riêng" },
+    { id: "overview" as const, label: copy.overviewLabel },
+    { id: "home" as const, label: copy.homeTabLabel },
   ];
 
   return (
@@ -306,7 +306,7 @@ export function App() {
           <button
             className="gmaps-sidebar__icon-button"
             type="button"
-            aria-label={sidebarCollapsed ? "Mở thanh bên" : "Thu gọn thanh bên"}
+            aria-label={sidebarCollapsed ? copy.openSidebarLabel : copy.collapseSidebarLabel}
             onClick={() => setSidebarCollapsed((current) => !current)}
           >
             <AppIcon name="menu" size={20} />
@@ -352,12 +352,12 @@ export function App() {
                     <div className="place-sheet__header-row">
                       <div>
                         <div className="place-sheet__headline">
-                          {selectedDevice?.deviceName ?? "Tracker 0CDADC"}
+                          {selectedDevice?.deviceName ?? copy.noDeviceSelected}
                         </div>
                         <div className="place-sheet__subline">
                           {lastUpdatedAt
-                            ? `Cập nhật ${formatTimestamp(lastUpdatedAt, locale)}`
-                            : "Đại lộ Tự Do"}
+                            ? `${copy.lastUpdated} ${formatTimestamp(lastUpdatedAt, locale)}`
+                            : copy.noDeviceSelected}
                         </div>
                       </div>
                       <span className="maps-info-badge">
@@ -367,7 +367,7 @@ export function App() {
 
                     {devices.length > 1 ? (
                       <label className="place-sheet__device-row">
-                        <span>Thiết bị</span>
+                        <span>{copy.deviceLabel}</span>
                         <select
                           className="maps-select"
                           value={selectedDeviceId ?? ""}
@@ -416,9 +416,13 @@ export function App() {
                   <div className="place-sheet__header">
                     <div className="place-sheet__header-row">
                       <div>
-                        <div className="place-sheet__headline">Lịch sử di chuyển của {selectedDevice?.deviceName ?? "thiết bị đã chọn"}</div>
+                        <div className="place-sheet__headline">
+                          {copy.movementHistory} của {selectedDevice?.deviceName ?? copy.noDeviceSelected}
+                        </div>
                       </div>
-                      <span className="maps-info-badge">{history.length} điểm</span>
+                      <span className="maps-info-badge">
+                        {history.length} {copy.pointsLabel}
+                      </span>
                     </div>
                   </div>
 
@@ -458,7 +462,7 @@ export function App() {
               onClick={() => setLocale(locale === "vi" ? "en" : "vi")}
               type="button"
             >
-              {locale === "vi" ? "EN" : "VI"}
+              {locale === "vi" ? copy.englishLabel : copy.vietnameseLabel}
             </button>
 
           </div>
@@ -472,7 +476,7 @@ export function App() {
               <AppIcon name="search" size={18} />
               <input
                 className="gmaps-searchbox__input"
-                placeholder="Tìm kiếm trên Maps"
+                placeholder={copy.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -543,7 +547,7 @@ export function App() {
                   color: "var(--text-soft)",
                   boxShadow: "var(--shadow-1)"
                 }}>
-                  Tìm kiếm...
+                  {copy.searchLoading}
                 </div>
               )}
             </div>
@@ -635,9 +639,11 @@ export function App() {
           <TrackerMap
             devices={devices}
             draftHome={visibleDraftHome}
-            draftPendingLabel={locale === "vi" ? "Chờ lưu" : "Pending save"}
+            draftPendingLabel={copy.draftPendingLabel}
             history={history}
             homeLabel={copy.homeLabel}
+            historyStartLabel={copy.historyStartLabel}
+            historyLatestLabel={copy.historyLatestLabel}
             locale={locale}
             onMapClick={handleMapClick}
             onControllerReady={setMapController}
@@ -661,7 +667,7 @@ export function App() {
             <div className="gmaps-layer-card__thumb" />
             <div className="gmaps-layer-card__info">
               <AppIcon name="layers" size={15} />
-              <span>{mapLayer === "roadmap" ? "Vệ tinh" : "Lớp"}</span>
+              <span>{mapLayer === "roadmap" ? copy.satelliteLabel : copy.roadmapLabel}</span>
             </div>
           </button>
 
@@ -695,10 +701,8 @@ export function App() {
           <div className="gmaps-attribution">
             <div className="gmaps-attribution__brand">Vũ Đăng Thanh x TA Solutions</div>
             <div className="gmaps-attribution__text">
-              <span>Dữ liệu bản đồ ©2026</span>
-              <span>Điều khoản</span>
-              <span>Quyền riêng tư</span>
-              <span>Gửi ý kiến phản hồi về sản phẩm</span>
+              <span>{copy.mapDataAttribution}</span>
+              <span>{copy.productFeedbackLabel}</span>
             </div>
           </div>
 

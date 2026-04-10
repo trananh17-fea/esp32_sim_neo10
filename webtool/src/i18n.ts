@@ -48,6 +48,14 @@ export type AppCopy = {
   lastUpdated: string;
   homeLabel: string;
   rangeLabels: Record<"24h" | "3d" | "7d", string>;
+  searchPlaceholder: string;
+  searchLoading: string;
+  draftPendingLabel: string;
+  satelliteLabel: string;
+  roadmapLabel: string;
+  homeSetLabel: string;
+  homeUnsetLabel: string;
+  cancelPickOnMapBtn: string;
   // Home panel
   homePanel: string;
   homePanelDesc: string;
@@ -65,6 +73,15 @@ export type AppCopy = {
   routeModeSelected: string;
   routeModeAll: string;
   historyToggle: string;
+  historyStartLabel: string;
+  historyLatestLabel: string;
+  deviceLabel: string;
+  overviewLabel: string;
+  homeTabLabel: string;
+  openSidebarLabel: string;
+  collapseSidebarLabel: string;
+  mapDataAttribution: string;
+  productFeedbackLabel: string;
   straightLine: string;
   distanceLabel: string;
   bearingLabel: string;
@@ -86,7 +103,7 @@ export const translations: Record<Locale, AppCopy> = {
     languageLabel: "Language",
     themeLabel: "Theme",
     englishLabel: "English",
-    vietnameseLabel: "Vietnamese",
+    vietnameseLabel: "VN",
     darkLabel: "Dark",
     lightLabel: "Light",
     loadingDevices: "Loading devices...",
@@ -128,6 +145,14 @@ export const translations: Record<Locale, AppCopy> = {
       "3d": "3 days", 
       "7d": "7 days",
     },
+    searchPlaceholder: "Search on map",
+    searchLoading: "Searching...",
+    draftPendingLabel: "Pending save",
+    satelliteLabel: "Satellite",
+    roadmapLabel: "Map",
+    homeSetLabel: "Home saved",
+    homeUnsetLabel: "Home not set",
+    cancelPickOnMapBtn: "Cancel map pick",
     homePanel: "Home Location",
     homePanelDesc: "Set a home point for this device. You can type coordinates or click \"Pick on map\" then click anywhere on the map.",
     setHomeBtn: "Set Home",
@@ -144,6 +169,15 @@ export const translations: Record<Locale, AppCopy> = {
     routeModeSelected: "Route: Selected Device",
     routeModeAll: "Route: All Devices",
     historyToggle: "History",
+    historyStartLabel: "Start",
+    historyLatestLabel: "Latest",
+    deviceLabel: "Device",
+    overviewLabel: "Overview",
+    homeTabLabel: "Home",
+    openSidebarLabel: "Open sidebar",
+    collapseSidebarLabel: "Collapse sidebar",
+    mapDataAttribution: "Map data ©2026",
+    productFeedbackLabel: "Send product feedback",
     straightLine: "Straight line",
     distanceLabel: "Distance",
     bearingLabel: "Bearing",
@@ -162,7 +196,7 @@ export const translations: Record<Locale, AppCopy> = {
       "Dữ liệu được lấy từ dữ liệu trực tiếp. Thiết bị đang chọn sẽ hiển thị thêm đường đi trong khoảng thời gian đã chọn.",
     languageLabel: "Ngôn ngữ",
     themeLabel: "Giao diện",
-    englishLabel: "Tiếng Anh",
+    englishLabel: "EN",
     vietnameseLabel: "Tiếng Việt",
     darkLabel: "Tối",
     lightLabel: "Sáng",
@@ -205,6 +239,14 @@ export const translations: Record<Locale, AppCopy> = {
       "3d": "3 ngày",
       "7d": "7 ngày",
     },
+    searchPlaceholder: "Tìm kiếm trên map",
+    searchLoading: "Đang tìm kiếm...",
+    draftPendingLabel: "Chờ lưu",
+    satelliteLabel: "Vệ tinh",
+    roadmapLabel: "Lớp",
+    homeSetLabel: "Đã lưu địa chỉ nhà",
+    homeUnsetLabel: "Chưa đặt địa chỉ nhà",
+    cancelPickOnMapBtn: "Hủy chọn trên bản đồ",
     homePanel: "Vị trí HOME",
     homePanelDesc: "Đặt vị trí HOME cho thiết bị này. Nhập tọa độ hoặc nhấn \"Chọn trên map\" rồi click vào vị trí trên bản đồ.",
     setHomeBtn: "Đặt HOME",
@@ -221,6 +263,15 @@ export const translations: Record<Locale, AppCopy> = {
     routeModeSelected: "Chỉ đường: Thiết bị chọn",
     routeModeAll: "Chỉ đường: Tất cả",
     historyToggle: "Lịch sử",
+    historyStartLabel: "Bắt đầu",
+    historyLatestLabel: "Mới nhất",
+    deviceLabel: "Thiết bị",
+    overviewLabel: "Tổng quan",
+    homeTabLabel: "Nhà riêng",
+    openSidebarLabel: "Mở thanh bên",
+    collapseSidebarLabel: "Thu gọn thanh bên",
+    mapDataAttribution: "Dữ liệu bản đồ ©2026",
+    productFeedbackLabel: "Gửi ý kiến phản hồi về sản phẩm",
     straightLine: "Đường thẳng",
     distanceLabel: "Khoảng cách",
     bearingLabel: "Hướng",

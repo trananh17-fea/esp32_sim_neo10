@@ -22,6 +22,12 @@ class AppErrorBoundary extends React.Component<
   }
 
   render() {
+    const isVietnamese = typeof navigator !== "undefined" && navigator.language.startsWith("vi");
+    const title = isVietnamese ? "Ứng dụng gặp lỗi runtime" : "Application runtime error";
+    const description = isVietnamese
+      ? "Trang không còn trắng hoàn toàn nữa. Đây là lỗi đang chặn giao diện hiển thị:"
+      : "Something went wrong with the UI. This error is preventing the app from rendering:";
+
     if (this.state.error) {
       return (
         <div
@@ -33,9 +39,9 @@ class AppErrorBoundary extends React.Component<
             color: "var(--text-main)",
           }}
         >
-          <h1 style={{ margin: "0 0 12px", fontSize: "24px" }}>Ứng dụng gặp lỗi runtime</h1>
+          <h1 style={{ margin: "0 0 12px", fontSize: "24px" }}>{title}</h1>
           <p style={{ margin: "0 0 12px", color: "var(--text-soft)" }}>
-            Trang không còn trắng hoàn toàn nữa. Đây là lỗi đang chặn giao diện hiển thị:
+            {description}
           </p>
           <pre
             style={{

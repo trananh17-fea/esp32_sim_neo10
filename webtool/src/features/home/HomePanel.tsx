@@ -35,8 +35,8 @@ function formatDistance(value: number | null) {
   return `${Math.round(value)} m`;
 }
 
-function formatCoordPair(lat?: number, lng?: number) {
-  if (typeof lat !== "number" || typeof lng !== "number") return "Chưa đặt địa chỉ nhà";
+function formatCoordPair(lat?: number, lng?: number, copy?: AppCopy) {
+  if (typeof lat !== "number" || typeof lng !== "number") return copy ? copy.homeUnsetLabel : "--";
   return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
@@ -104,8 +104,8 @@ export function HomePanel({
       : null;
 
   const selectedAddress = isValidCoords
-    ? formatCoordPair(parsedLat, parsedLng)
-    : formatCoordPair(device.homeLat, device.homeLng);
+    ? formatCoordPair(parsedLat, parsedLng, copy)
+    : formatCoordPair(device.homeLat, device.homeLng, copy);
 
   const handleUseCurrentPos = () => {
     setLatStr(device.lat.toFixed(6));
@@ -150,9 +150,9 @@ export function HomePanel({
           <AppIcon name="home" size={18} />
         </div>
         <div className="maps-home-card__body">
-          <p className="maps-home-card__eyebrow">Nhà riêng</p>
+          <p className="maps-home-card__eyebrow">{copy.homePanel}</p>
           <strong className="maps-home-card__title">
-            {device.homeSet ? "Đã lưu địa chỉ nhà" : "Chưa đặt địa chỉ nhà"}
+            {device.homeSet ? copy.homeSetLabel : copy.homeUnsetLabel}
           </strong>
           <p className="maps-home-card__address">{selectedAddress}</p>
         </div>
@@ -179,7 +179,7 @@ export function HomePanel({
 
       <div className="place-detail-grid">
         <div className="place-detail-row">
-          <span>Khoảng cách từ thiết bị</span>
+          <span>{copy.distanceToHome}</span>
           <strong>{formatDistance(previewDistance ?? device.distanceToHomeM ?? null)}</strong>
         </div>
       </div>
@@ -191,7 +191,7 @@ export function HomePanel({
           type="button"
         >
           <AppIcon name="location" size={16} />
-          <span>{pickMode === "picking" ? "Hủy chọn trên bản đồ" : "Chọn trên bản đồ"}</span>
+          <span>{pickMode === "picking" ? copy.cancelPickOnMapBtn : copy.pickOnMapBtn}</span>
         </button>
         <button className="maps-home-action" onClick={handleUseCurrentPos} type="button">
           <AppIcon name="refresh" size={16} />
@@ -204,7 +204,7 @@ export function HomePanel({
           type="button"
         >
           <AppIcon name="saved" size={16} />
-          <span>{status === "saving" ? copy.homeSaving : "Lưu nhà riêng"}</span>
+          <span>{status === "saving" ? copy.homeSaving : copy.setHomeBtn}</span>
         </button>
         {device.homeSet ? (
           <button

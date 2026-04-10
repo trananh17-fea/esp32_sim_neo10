@@ -29,6 +29,8 @@ type TrackerMapProps = {
   history: TrackerHistoryPoint[];
   homeLabel: string;
   draftPendingLabel: string;
+  historyStartLabel: string;
+  historyLatestLabel: string;
   locale: Locale;
   selectedDeviceId: string | null;
   theme: ThemeMode;
@@ -137,27 +139,19 @@ function formatDuration(durationS: number): string {
   return `${(durationS / 3600).toFixed(1)} h`;
 }
 
-function getHistoryLabel(kind: "start" | "latest", locale: Locale): string {
-  if (locale === "vi") {
-    return kind === "start" ? "Bat dau" : "Moi nhat";
-  }
-
-  return kind === "start" ? "Start" : "Latest";
-}
-
 function formatHistoryPointTooltip(point: TrackerHistoryPoint): string {
   return `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
 }
 
-function formatScaleLabel(distanceM: number): string {
+function formatScaleLabel(distanceM: number, locale: Locale): string {
   if (distanceM >= 1000) {
     const km = (distanceM / 1000).toFixed(1).replace(/\.0$/, "");
     return `${km} km`;
   }
-  return `${Math.round(distanceM)} mét`;
+  return `${Math.round(distanceM)} ${locale === "vi" ? "mét" : "m"}`;
 }
 
-function computeScaleDetails(map: any) {
+function computeScaleDetails(map: any, locale: Locale) {
   const size = map.getSize();
   const y = Math.round(size.y / 2);
   const left = map.containerPointToLatLng(point(16, y));
@@ -170,14 +164,16 @@ function computeScaleDetails(map: any) {
   const width = Math.round((distanceM / meters) * 80);
 
   return {
-    label: formatScaleLabel(distanceM),
+    label: formatScaleLabel(distanceM, locale),
     width: Math.max(32, Math.min(width, 120)),
   };
 }
 
 function ScaleObserver({
+  locale,
   onScaleChange,
 }: {
+  locale: Locale;
   onScaleChange?: (details: { label: string; width: number }) => void;
 }) {
   const map = useMap();
@@ -186,7 +182,7 @@ function ScaleObserver({
     if (!onScaleChange) return;
 
     const update = () => {
-      const details = computeScaleDetails(map);
+      const details = computeScaleDetails(map, locale);
       onScaleChange(details);
     };
 
@@ -196,7 +192,7 @@ function ScaleObserver({
     return () => {
       map.off("zoomend moveend resize", update);
     };
-  }, [map, onScaleChange]);
+  }, [map, onScaleChange, locale]);
 
   return null;
 }
@@ -346,6 +342,8 @@ export function TrackerMap({
   history,
   homeLabel,
   draftPendingLabel,
+  historyStartLabel,
+  historyLatestLabel,
   locale,
   selectedDeviceId,
   theme,
@@ -509,7 +507,7 @@ export function TrackerMap({
           onMapClick={onMapClick ?? (() => { })}
         />
         <MapControllerBridge center={center} onControllerReady={onControllerReady} />
-        <ScaleObserver onScaleChange={onScaleChange} />
+        <ScaleObserver locale={locale} onScaleChange={onScaleChange} />
 
         {visibleDevices.map((device) =>
           device.deviceId === selectedDeviceId ? (
@@ -606,7 +604,7 @@ export function TrackerMap({
             >
               <div className="history-point-tooltip__body">
                 <span className="history-point-tooltip__tag">
-                  {getHistoryLabel("start", locale)}
+                  {historyStartLabel}
                 </span>
                 <strong>{formatTimestamp(historyStart.timestamp, locale)}</strong>
                 <div>{formatHistoryPointTooltip(historyStart)}</div>
@@ -634,7 +632,7 @@ export function TrackerMap({
             >
               <div className="history-point-tooltip__body">
                 <span className="history-point-tooltip__tag">
-                  {getHistoryLabel("latest", locale)}
+                  {historyLatestLabel}
                 </span>
                 <strong>{formatTimestamp(historyLatest.timestamp, locale)}</strong>
                 <div>{formatHistoryPointTooltip(historyLatest)}</div>
