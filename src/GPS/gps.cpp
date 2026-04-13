@@ -544,15 +544,11 @@ void gpsTask(void *pvParameters) {
   gpsRecoveryStep = 0;
   gpsAcqStartMs = millis();
 
-  // 0) Autobaud detection
-  long baud = detectGPSBaud();
-  if (baud < 0) {
-    baud = 38400;
-    SerialGPS.begin(baud, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-    logPrintf("[GPS] Fallback to %ld baud (may not work)", baud);
-  }
-
-  vTaskDelay(pdMS_TO_TICKS(500));
+  // 0) Force 38400 baud initialization to skip slow Autobaud
+  long baud = 38400;
+  SerialGPS.begin(baud, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  vTaskDelay(pdMS_TO_TICKS(100));
+  while (SerialGPS.available()) SerialGPS.read(); // Clear boot garbage
 
   // 1) Inject approximate position from last known fix/home, if available.
   bool positionInjected = tryInjectPositionFromNVS();

@@ -239,14 +239,8 @@ void init_sim7680c() {
   }
   SIM_setCapability(SIM_CAP_RADIO_OK);
 
-  // Đồng bộ thời gian
-  logLine("[SIM] Đang ép đồng bộ thời gian qua NTP...");
-  simSerial.println("AT+CNTP=\"pool.ntp.org\",28"); // 28 là múi giờ +7 (7*4)
-  delay(200);
-  simSerial.println("AT+CNTP");
-  delay(1000); // Chờ module xử lý
-  String ntpResp = sim_readResponse(5000);
-  logPrintf("[SIM] NTP Response: %s", ntpResp.c_str());
+  // Time sync via NTP (AT+CNTP) moved out. It should not be forced at cold boot
+  // since GPRS is not ready and it will block the caller for several seconds.
 
   // PDP context (Viettel)
   simSerial.println("AT+CGATT=1");
@@ -271,6 +265,8 @@ void init_sim7680c() {
   delay(100);
   simSerial.println("AT+CSSLCFG=\"ignoretimediff\",0,1");
   delay(100);
+  simSerial.println("AT+CLBSCFG=1,1"); // Bật hỗ trợ LBS
+  delay(150);
 
   // SMS text mode + CLCC unsolicited
   const char *cmds[] = {
@@ -317,8 +313,28 @@ bool sim_isRegistered() {
 
   bool registered = (r.indexOf(",1") > 0 || r.indexOf(",5") > 0);
   if (registered) {
-    if (SIM_getCapability() < SIM_CAP_VOICE_SMS_OK)
+    if (SIM_getCapability() < SIM_CAP_VOICE_SMS_OK) {
       SIM_setCapability(SIM_CAP_VOICE_SMS_OK);
+
+      logLine("[SIM] Network registered! Activating PDP Context & NTP...");
+      if (simMutex)
+        xSemaphoreTake(simMutex, portMAX_DELAY);
+
+      simSerial.println("AT+CGATT=1");
+      sim_readResponse(500);
+      simSerial.println("AT+CGDCONT=1,\"IP\",\"v-internet\"");
+      sim_readResponse(500);
+      simSerial.println("AT+CGACT=1,1");
+      sim_readResponse(2000); // give it time to activate internet
+
+      // Try resolving time over NTP now that data is likely up
+      simSerial.println("AT+CNTP=\"pool.ntp.org\",28");
+      sim_readResponse(500);
+      simSerial.println("AT+CNTP");
+
+      if (simMutex)
+        xSemaphoreGive(simMutex);
+    }
   } else if (SIM_getCapability() > SIM_CAP_RADIO_OK) {
     SIM_setCapability(SIM_CAP_RADIO_OK);
   }

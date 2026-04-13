@@ -87,7 +87,7 @@ static void onWiFiEvent(WiFiEvent_t event) {
     break;
   case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
     stopMdns();
-    Serial.println("[WIFI] STA disconnected");
+    // Serial.println("[WIFI] STA disconnected");
     break;
   default:
     break;

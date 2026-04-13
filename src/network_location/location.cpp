@@ -638,13 +638,16 @@ static bool doCellGeolocationViaSIMApi() {
 // Trong file location.cpp
 
 static bool doCellGeolocationCLBS() {
-  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK))
+  // Thêm log để debug
+  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK)) {
+    printf("[NETLOC] Bỏ qua LBS vì SIM chưa sẵn sàng (No Signal)\n");
     return false;
+  }
 
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  simSerial.println("AT+CLBS=1");
+  simSerial.println("AT+CLBS=1,1");
 
   String resp = "";
   unsigned long t0 = millis();
@@ -679,7 +682,8 @@ static bool doCellGeolocationCLBS() {
   if (firstComma < 0)
     return false;
 
-  int ret = line.substring(7, firstComma).toInt();
+  int startIdx = line.indexOf(": ") + 2;
+  int ret = line.substring(startIdx, firstComma).toInt();
   if (ret != 0) {
     logPrintf("[NETLOC] CLBS error code: %d", ret);
     return false;
@@ -781,16 +785,17 @@ void networkLocationTask(void *pvParameters) {
 
     if (!isBootNetlocTransportReady()) {
       transportReadySinceMs = 0;
-      logNetlocThrottled(
-          "[NETLOC] Waiting for SIM/WiFi transport before startup network location",
-          &LAST_SIM_DATA_NOT_READY_LOG_MS);
+      logNetlocThrottled("[NETLOC] Waiting for SIM/WiFi transport before "
+                         "startup network location",
+                         &LAST_SIM_DATA_NOT_READY_LOG_MS);
       vTaskDelay(pdMS_TO_TICKS(NETLOC_BOOT_RETRY_MS));
       continue;
     }
 
     if (transportReadySinceMs == 0) {
       transportReadySinceMs = millis();
-      logLine("[NETLOC] Transport is ready, waiting a bit before first LBS scan");
+      logLine(
+          "[NETLOC] Transport is ready, waiting a bit before first LBS scan");
       vTaskDelay(pdMS_TO_TICKS(5000));
       continue;
     }
