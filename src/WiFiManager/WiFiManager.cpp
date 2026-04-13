@@ -1,4 +1,5 @@
 #include "WiFiManager.h"
+#include "Config.h"
 #include "server.h"
 #include <time.h>
 
@@ -7,7 +8,21 @@ static constexpr const char *AP_PASS = "123456788";
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_MASK(255, 255, 255, 0);
 
-static bool hasStaCredentials() { return strlen(SSID_Name) > 0; }
+static bool staCredentialsConfigured() { return strlen(SSID_Name) > 0; }
+
+static bool shouldStartSta() { return staCredentialsConfigured(); }
+
+static bool shouldStartAp() {
+  if (!staCredentialsConfigured())
+    return true;
+  return WIFI_AP_ENABLE;
+}
+
+static void stopSta(bool powerOffRadio) {
+  WiFi.setAutoReconnect(false);
+  WiFi.disconnect(powerOffRadio, false);
+  delay(120);
+}
 
 static void configureSoftAp() {
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
@@ -49,9 +64,9 @@ static void onWiFiEvent(WiFiEvent_t event) {
 
 // ============================================================
 // ** SINGLE SOURCE OF TRUTH for WiFi.mode() **
-// Power-saving policy:
-//   - If STA credentials exist, run STA-only to avoid constant AP drain.
-//   - If no STA credentials exist, start AP for provisioning.
+// Connectivity policy:
+//   - STA follows hardcoded credentials.
+//   - AP host TV_DEVICE follows the saved config.
 // ============================================================
 void initWiFi() {
   WiFi.persistent(false);
@@ -59,29 +74,39 @@ void initWiFi() {
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(onWiFiEvent);
 
-  if (hasStaCredentials()) {
+  if (shouldStartSta() && shouldStartAp()) {
+    Serial.println("[WIFI] Mode=AP+STA");
+    WiFi.mode(WIFI_MODE_APSTA);
+    configureSoftAp();
+    stopSta(false);
+    WiFi.setAutoReconnect(true);
+    startStaConnect();
+  } else if (shouldStartSta()) {
+    Serial.println("[WIFI] Mode=STA only (AP host disabled by config)");
     WiFi.mode(WIFI_MODE_STA);
+    stopSta(false);
+    WiFi.setAutoReconnect(true);
     startStaConnect();
   } else {
     WiFi.mode(WIFI_MODE_AP);
     configureSoftAp();
-    Serial.println("[WIFI] No STA credentials, AP-only provisioning mode");
+    Serial.println("[WIFI] Mode=AP only (no STA credentials)");
   }
 
   unsigned long t0 = millis();
-  while (hasStaCredentials() && WiFi.status() != WL_CONNECTED &&
+  while (shouldStartSta() && WiFi.status() != WL_CONNECTED &&
          millis() - t0 < 8000) {
     delay(400);
     Serial.print(".");
   }
 
-  if (hasStaCredentials() && WiFi.status() == WL_CONNECTED)
+  if (shouldStartSta() && WiFi.status() == WL_CONNECTED)
     Serial.printf("\n[WIFI] STA OK  IP=%s\n",
                   WiFi.localIP().toString().c_str());
-  else if (hasStaCredentials())
+  else if (shouldStartSta())
     Serial.println("\n[WIFI] STA failed");
   else
-    Serial.println("\n[WIFI] STA failed (AP still running)");
+    Serial.println("\n[WIFI] AP-only mode active");
 }
 
 void wifiEnterScanMode() {
@@ -95,15 +120,30 @@ void wifiEnterScanMode() {
 }
 
 void wifiRestoreApStaMode() {
-  if (hasStaCredentials()) {
-    WiFi.mode(WIFI_MODE_STA);
-  } else {
-    WiFi.mode(WIFI_MODE_AP);
-  }
-  WiFi.setSleep(WIFI_PS_MIN_MODEM);
-  if (hasStaCredentials())
-    startStaConnect();
-  else
+  if (shouldStartSta() && shouldStartAp()) {
+    Serial.println("[WIFI] Reconfiguring WiFi: AP+STA");
+    WiFi.mode(WIFI_MODE_APSTA);
+    WiFi.setSleep(WIFI_PS_MIN_MODEM);
     configureSoftAp();
-  WiFi.setAutoReconnect(true);
+    stopSta(false);
+    WiFi.setAutoReconnect(true);
+    startStaConnect();
+    return;
+  }
+
+  if (shouldStartSta()) {
+    Serial.println("[WIFI] Reconfiguring WiFi: STA only (AP host disabled)");
+    WiFi.mode(WIFI_MODE_STA);
+    WiFi.setSleep(WIFI_PS_MIN_MODEM);
+    stopSta(false);
+    WiFi.setAutoReconnect(true);
+    startStaConnect();
+    return;
+  }
+
+  Serial.println("[WIFI] Reconfiguring WiFi: AP only (no STA credentials)");
+  stopSta(true);
+  WiFi.mode(WIFI_MODE_AP);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);
+  configureSoftAp();
 }

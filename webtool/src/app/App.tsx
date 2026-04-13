@@ -21,6 +21,7 @@ import type {
   TrackerDeviceSummary,
   TrackerHistoryPoint,
 } from "../types/tracker";
+import { getDeviceColor } from "../utils/deviceColors";
 
 const logofullUrl = new URL("../img/logofull.png", import.meta.url).href;
 const REFRESH_INTERVAL_MS = 60000;
@@ -53,7 +54,7 @@ function cycleRouteMode(current: RouteMode): RouteMode {
 
 export function App() {
   const [devices, setDevices] = useState<TrackerDeviceSummary[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [historyRange, setHistoryRange] = useState<HistoryRange>("24h");
   const [history, setHistory] = useState<TrackerHistoryPoint[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
@@ -87,10 +88,16 @@ export function App() {
 
   const copy = translations[locale];
   const onlineCount = devices.filter((device) => device.online).length;
+  const primarySelectedId = selectedDeviceIds[0] ?? null;
   const selectedDevice = useMemo(
-    () => devices.find((device) => device.deviceId === selectedDeviceId) ?? null,
-    [devices, selectedDeviceId],
+    () => devices.find((device) => device.deviceId === primarySelectedId) ?? null,
+    [devices, primarySelectedId],
   );
+  const deviceColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    devices.forEach((device, index) => map.set(device.deviceId, getDeviceColor(index)));
+    return map;
+  }, [devices]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -110,9 +117,11 @@ export function App() {
 
         setDevices(nextDevices);
         setLastUpdatedAt(Date.now());
-        setSelectedDeviceId((current) => {
-          if (current && nextDevices.some((device) => device.deviceId === current)) return current;
-          return nextDevices[0]?.deviceId ?? null;
+        setSelectedDeviceIds((prev) => {
+          if (prev.length > 0) {
+            return prev.filter((id) => nextDevices.some((device) => device.deviceId === id));
+          }
+          return nextDevices[0] ? [nextDevices[0].deviceId] : [];
         });
         setError(null);
       } catch (err) {
@@ -137,14 +146,14 @@ export function App() {
     let cancelled = false;
 
     const loadHistory = async () => {
-      if (!selectedDeviceId) {
+      if (!primarySelectedId) {
         setHistory([]);
         return;
       }
 
       try {
         setLoadingHistory(true);
-        const points = await fetchHistory(selectedDeviceId, historyRange);
+        const points = await fetchHistory(primarySelectedId, historyRange);
         if (!cancelled) {
           setHistory(points);
           setError(null);
@@ -162,12 +171,12 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [historyRange, selectedDeviceId]);
+  }, [historyRange, primarySelectedId]);
 
   useEffect(() => {
     setPickMode("idle");
     setPendingPick(null);
-  }, [selectedDeviceId]);
+  }, [primarySelectedId]);
 
   const handleRename = async (deviceId: string, nextName: string) => {
     const trimmed = nextName.trim();
@@ -251,7 +260,7 @@ export function App() {
     setPickMode("idle");
     setDevices((prev) =>
       prev.map((device) =>
-        device.deviceId === selectedDeviceId
+        device.deviceId === primarySelectedId
           ? { ...device, distanceToHomeM, homeLat, homeLng, homeSet: true }
           : device,
       ),
@@ -264,7 +273,7 @@ export function App() {
     setPickMode("idle");
     setDevices((prev) =>
       prev.map((device) =>
-        device.deviceId === selectedDeviceId
+        device.deviceId === primarySelectedId
           ? {
             ...device,
             distanceToHomeM: -1,
@@ -365,21 +374,43 @@ export function App() {
                       </span>
                     </div>
 
-                    {devices.length > 1 ? (
-                      <label className="place-sheet__device-row">
+                    {devices.length > 0 ? (
+                      <div className="place-sheet__device-row">
                         <span>{copy.deviceLabel}</span>
-                        <select
-                          className="maps-select"
-                          value={selectedDeviceId ?? ""}
-                          onChange={(event) => setSelectedDeviceId(event.target.value || null)}
-                        >
-                          {devices.map((device) => (
-                            <option key={device.deviceId} value={device.deviceId}>
-                              {device.deviceName || device.deviceId}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                        <div className="place-sheet__device-list">
+                          {devices.map((device, index) => {
+                            const color =
+                              deviceColorMap.get(device.deviceId) ?? getDeviceColor(index);
+                            const checked = selectedDeviceIds.includes(device.deviceId);
+
+                            return (
+                              <label key={device.deviceId} className="device-picker-row">
+                                <span
+                                  className="device-picker-row__color"
+                                  style={{ background: color }}
+                                />
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    setSelectedDeviceIds((prev) =>
+                                      checked
+                                        ? prev.filter((id) => id !== device.deviceId)
+                                        : [...prev, device.deviceId],
+                                    );
+                                  }}
+                                />
+                                <span className="device-picker-row__name">
+                                  {device.deviceName || device.deviceId}
+                                </span>
+                                <span
+                                  className={`device-picker-row__status ${device.online ? "online" : "offline"}`}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     ) : null}
                   </div>
 
@@ -637,6 +668,7 @@ export function App() {
 
         <section className="gmaps-map-stage">
           <TrackerMap
+            deviceColorMap={deviceColorMap}
             devices={devices}
             draftHome={visibleDraftHome}
             draftPendingLabel={copy.draftPendingLabel}
@@ -650,7 +682,7 @@ export function App() {
             onScaleChange={setScaleBar}
             pickMode={pickMode}
             routeMode={routeMode}
-            selectedDeviceId={selectedDeviceId}
+            selectedDeviceIds={selectedDeviceIds}
             showHistory={showHistory}
             mapLayer={mapLayer}
             theme={theme}

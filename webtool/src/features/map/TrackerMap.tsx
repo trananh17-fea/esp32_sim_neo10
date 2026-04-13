@@ -32,7 +32,8 @@ type TrackerMapProps = {
   historyStartLabel: string;
   historyLatestLabel: string;
   locale: Locale;
-  selectedDeviceId: string | null;
+  selectedDeviceIds: string[];
+  deviceColorMap: Map<string, string>;
   theme: ThemeMode;
   mapLayer: MapLayerMode;
   pickMode: HomePickMode;
@@ -77,14 +78,6 @@ const draftIcon = divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 32],
   tooltipAnchor: [0, -28],
-});
-
-const selectedDeviceIcon = divIcon({
-  html: '<div class="tracker-pin"><span class="tracker-pin__core"></span></div>',
-  className: "tracker-pin-icon",
-  iconSize: [34, 48],
-  iconAnchor: [17, 46],
-  tooltipAnchor: [0, -38],
 });
 
 const DEFAULT_CENTER: [number, number] = [10.901146, 106.806184];
@@ -345,7 +338,8 @@ export function TrackerMap({
   historyStartLabel,
   historyLatestLabel,
   locale,
-  selectedDeviceId,
+  selectedDeviceIds,
+  deviceColorMap,
   theme,
   mapLayer,
   pickMode,
@@ -362,6 +356,11 @@ export function TrackerMap({
     () => devices.filter((d) => isValidPair(d.lat, d.lng)),
     [devices]
   );
+  const selectedDeviceIdSet = useMemo(
+    () => new Set(selectedDeviceIds),
+    [selectedDeviceIds]
+  );
+  const primarySelectedId = selectedDeviceIds[0] ?? null;
   const visibleHistory = useMemo(
     () =>
       history.filter(
@@ -380,17 +379,36 @@ export function TrackerMap({
     (Math.abs(historyStart.lat - historyLatest.lat) > BOOTSTRAP_EPSILON ||
       Math.abs(historyStart.lng - historyLatest.lng) > BOOTSTRAP_EPSILON);
   const selectedDevice =
-    visibleDevices.find((d) => d.deviceId === selectedDeviceId) ?? null;
-
-  const center = useMemo<[number, number]>(
-    () =>
-      selectedDevice
-        ? [selectedDevice.lat, selectedDevice.lng]
-        : visibleDevices[0]
-          ? [visibleDevices[0].lat, visibleDevices[0].lng]
-          : DEFAULT_CENTER,
-    [selectedDevice, visibleDevices],
+    visibleDevices.find((d) => d.deviceId === primarySelectedId) ?? null;
+  const selectedVisibleDevices = useMemo(
+    () => visibleDevices.filter((device) => selectedDeviceIdSet.has(device.deviceId)),
+    [selectedDeviceIdSet, visibleDevices]
   );
+  const unselectedVisibleDevices = useMemo(
+    () => visibleDevices.filter((device) => !selectedDeviceIdSet.has(device.deviceId)),
+    [selectedDeviceIdSet, visibleDevices]
+  );
+  const primaryColor =
+    (primarySelectedId ? deviceColorMap.get(primarySelectedId) : undefined) ?? "#2563eb";
+
+  const center = useMemo<[number, number]>(() => {
+    if (selectedVisibleDevices.length === 0) {
+      return visibleDevices[0]
+        ? [visibleDevices[0].lat, visibleDevices[0].lng]
+        : DEFAULT_CENTER;
+    }
+    if (selectedVisibleDevices.length === 1) {
+      return [selectedVisibleDevices[0].lat, selectedVisibleDevices[0].lng];
+    }
+
+    const avgLat =
+      selectedVisibleDevices.reduce((sum, device) => sum + device.lat, 0) /
+      selectedVisibleDevices.length;
+    const avgLng =
+      selectedVisibleDevices.reduce((sum, device) => sum + device.lng, 0) /
+      selectedVisibleDevices.length;
+    return [avgLat, avgLng];
+  }, [selectedVisibleDevices, visibleDevices]);
 
   const tileConfig = useMemo(
     () =>
@@ -419,18 +437,18 @@ export function TrackerMap({
         (device) =>
           isValidPair(device.homeLat, device.homeLng) &&
           device.homeSet &&
-          (routeMode === "all" || device.deviceId === selectedDeviceId)
+          (routeMode === "all" || selectedDeviceIdSet.has(device.deviceId))
       )
       .map((device) => ({
         deviceId: device.deviceId,
         deviceName: device.deviceName,
-        selected: device.deviceId === selectedDeviceId,
+        selected: selectedDeviceIdSet.has(device.deviceId),
         startLat: device.lat,
         startLng: device.lng,
         endLat: device.homeLat!,
         endLng: device.homeLng!,
       }));
-  }, [routeMode, selectedDeviceId, visibleDevices]);
+  }, [routeMode, selectedDeviceIdSet, visibleDevices]);
 
   const routeRequestKey = useMemo(
     () => routeRequests.map(buildRouteKey).join("|"),
@@ -509,42 +527,55 @@ export function TrackerMap({
         <MapControllerBridge center={center} onControllerReady={onControllerReady} />
         <ScaleObserver locale={locale} onScaleChange={onScaleChange} />
 
-        {visibleDevices.map((device) =>
-          device.deviceId === selectedDeviceId ? (
-            <Marker
-              key={device.deviceId}
-              position={[device.lat, device.lng]}
-              icon={selectedDeviceIcon}
-              zIndexOffset={900}
-            >
-              <Tooltip direction="top" offset={[0, -30]}>
-                <div>
-                  <strong>{device.deviceName}</strong>
-                  <div style={{ opacity: 0.7, fontSize: "0.8em" }}>{device.deviceId}</div>
-                </div>
-              </Tooltip>
-            </Marker>
-          ) : (
+        {unselectedVisibleDevices.map((device) => (
+          <CircleMarker
+            key={device.deviceId}
+            center={[device.lat, device.lng]}
+            radius={5}
+            pathOptions={{
+              color: "#5f6368",
+              fillColor: "#9aa0a6",
+              fillOpacity: 0.5,
+              weight: 1.5,
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -8]}>
+              <div>
+                <strong>{device.deviceName || device.deviceId}</strong>
+                <div style={{ opacity: 0.7, fontSize: "0.8em" }}>{device.deviceId}</div>
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        ))}
+
+        {selectedVisibleDevices.map((device) => {
+          const color = deviceColorMap.get(device.deviceId) ?? "#9aa0a6";
+
+          return (
             <CircleMarker
               key={device.deviceId}
               center={[device.lat, device.lng]}
-              radius={6}
+              radius={10}
               pathOptions={{
-                color: "#5f6368",
-                fillColor: device.online ? "#76a7fa" : "#9aa0a6",
-                fillOpacity: 0.94,
-                weight: 2,
+                color: "#ffffff",
+                fillColor: color,
+                fillOpacity: 0.95,
+                weight: 3,
               }}
             >
-              <Tooltip direction="top" offset={[0, -10]}>
+              <Tooltip
+                direction="top"
+                offset={[0, -12]}
+                permanent={selectedDeviceIds.length > 1}
+              >
                 <div>
-                  <strong>{device.deviceName}</strong>
+                  <strong style={{ color }}>{device.deviceName || device.deviceId}</strong>
                   <div style={{ opacity: 0.7, fontSize: "0.8em" }}>{device.deviceId}</div>
                 </div>
               </Tooltip>
             </CircleMarker>
-          ),
-        )}
+          );
+        })}
 
         {showHistory && visibleHistory.length > 1 && (
           <>
@@ -558,7 +589,7 @@ export function TrackerMap({
             />
             <Polyline
               positions={visibleHistory.map((p) => [p.lat, p.lng])}
-              pathOptions={{ color: "#2563eb", weight: 4.5, opacity: 0.92 }}
+              pathOptions={{ color: primaryColor, weight: 4.5, opacity: 0.92 }}
             />
           </>
         )}
@@ -571,7 +602,7 @@ export function TrackerMap({
               radius={6}
               pathOptions={{
                 color: "#ffffff",
-                fillColor: "#2563eb",
+                fillColor: primaryColor,
                 fillOpacity: 0.96,
                 weight: 2.5,
               }}
@@ -646,9 +677,9 @@ export function TrackerMap({
             key={`route-${route.deviceId}`}
             positions={route.positions}
             pathOptions={{
-              color: route.selected ? "#2b7de9" : "#9aa0a6",
+              color: deviceColorMap.get(route.deviceId) ?? "#9aa0a6",
               weight: route.selected ? 4 : 2.5,
-              opacity: route.selected ? 0.88 : 0.56,
+              opacity: route.selected ? 0.88 : 0.4,
               dashArray: route.source === "fallback" ? "8 6" : undefined,
             }}
           >
@@ -668,8 +699,8 @@ export function TrackerMap({
               center={[selectedDevice.homeLat!, selectedDevice.homeLng!]}
               radius={9}
               pathOptions={{
-                color: "#1a73e8",
-                fillColor: "#76a7fa",
+                color: primaryColor,
+                fillColor: primaryColor,
                 fillOpacity: 0.9,
                 weight: 2,
               }}
@@ -682,9 +713,9 @@ export function TrackerMap({
                 center={[selectedDevice.homeLat!, selectedDevice.homeLng!]}
                 radius={selectedDevice.geoRadiusM!}
                 pathOptions={{
-                  color: "#1a73e8",
+                  color: primaryColor,
                   opacity: 0.6,
-                  fillColor: "#76a7fa",
+                  fillColor: primaryColor,
                   fillOpacity: 0.08,
                   dashArray: "6 4",
                 }}
@@ -696,25 +727,30 @@ export function TrackerMap({
         {visibleDevices
           .filter(
             (d) =>
-              d.deviceId !== selectedDeviceId &&
+              d.deviceId !== primarySelectedId &&
               d.homeSet &&
               isValidPair(d.homeLat, d.homeLng)
           )
-          .map((d) => (
-            <CircleMarker
-              key={`home-${d.deviceId}`}
-              center={[d.homeLat!, d.homeLng!]}
-              radius={5}
-              pathOptions={{
-                color: "#64748b",
-                fillColor: "#64748b",
-                fillOpacity: 0.5,
-                weight: 1,
-              }}
-            >
-              <Tooltip direction="top">{d.deviceName}</Tooltip>
-            </CircleMarker>
-          ))}
+          .map((d) => {
+            const isSelected = selectedDeviceIdSet.has(d.deviceId);
+            const color = deviceColorMap.get(d.deviceId) ?? "#64748b";
+
+            return (
+              <CircleMarker
+                key={`home-${d.deviceId}`}
+                center={[d.homeLat!, d.homeLng!]}
+                radius={isSelected ? 6 : 5}
+                pathOptions={{
+                  color: isSelected ? color : "#64748b",
+                  fillColor: isSelected ? color : "#64748b",
+                  fillOpacity: isSelected ? 0.72 : 0.5,
+                  weight: isSelected ? 1.5 : 1,
+                }}
+              >
+                <Tooltip direction="top">{d.deviceName || d.deviceId}</Tooltip>
+              </CircleMarker>
+            );
+          })}
 
         {draftHome && (
           <Marker position={[draftHome.lat, draftHome.lng]} icon={draftIcon} zIndexOffset={1000}>

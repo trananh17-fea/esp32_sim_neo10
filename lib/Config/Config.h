@@ -69,6 +69,7 @@ struct ConfigSnapshot {
   char assistChipcode[CONFIG_ASSIST_CHIPCODE_LEN];
   char assistToken[CONFIG_ASSIST_TOKEN_LEN];
   bool simTrackingEnable;
+  bool wifiApEnable;
   char wifiTrackingUrl[CONFIG_TRACKING_URL_LEN];
   char simTrackingUrl[CONFIG_TRACKING_URL_LEN];
   unsigned long trackingCurrentMovingIntervalMs;
@@ -175,6 +176,7 @@ extern char ASSIST_TOKEN[128];
 
 // --- SIM tracking ---
 extern bool SIM_TRACKING_ENABLE;
+extern bool WIFI_AP_ENABLE;
 extern char WIFI_TRACKING_URL[CONFIG_TRACKING_URL_LEN];
 extern char SIM_TRACKING_URL[CONFIG_TRACKING_URL_LEN];
 extern unsigned long TRACKING_CURRENT_MOVING_INTERVAL_MS;

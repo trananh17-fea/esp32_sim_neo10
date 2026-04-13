@@ -143,6 +143,7 @@ void loadDataFromRom() {
 
   // SIM tracking
   nvsReadBool("SIM_TRK", &cfg.simTrackingEnable, true);
+  nvsReadBool("WIFI_AP_EN", &cfg.wifiApEnable, true);
   nvsReadStr("WTRK_URL", cfg.wifiTrackingUrl, sizeof(cfg.wifiTrackingUrl),
              "https://gps-tracker.ahcntab.workers.dev/update");
   nvsReadStr("STRK_URL", cfg.simTrackingUrl, sizeof(cfg.simTrackingUrl), "");
@@ -208,6 +209,7 @@ void saveAllConfig() {
   nvs_set_str(nvsHandle, "CHIPCODE", cfg.assistChipcode);
   nvs_set_str(nvsHandle, "ASST_TOK", cfg.assistToken);
   nvs_set_u8(nvsHandle, "SIM_TRK", cfg.simTrackingEnable ? 1 : 0);
+  nvs_set_u8(nvsHandle, "WIFI_AP_EN", cfg.wifiApEnable ? 1 : 0);
   nvs_set_str(nvsHandle, "WTRK_URL", cfg.wifiTrackingUrl);
   nvs_set_str(nvsHandle, "STRK_URL", cfg.simTrackingUrl);
   nvs_set_i32(nvsHandle, "TRK_C_MOV",

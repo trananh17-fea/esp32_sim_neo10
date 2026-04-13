@@ -37,6 +37,7 @@ char ASSIST_CHIPCODE[64] = ""; // no compiled-in default; loaded from NVS only
 char ASSIST_TOKEN[128] = "";
 
 bool SIM_TRACKING_ENABLE = true;
+bool WIFI_AP_ENABLE = true;
 char WIFI_TRACKING_URL[CONFIG_TRACKING_URL_LEN] =
     "https://gps-tracker.ahcntab.workers.dev/update";
 char SIM_TRACKING_URL[CONFIG_TRACKING_URL_LEN] = "";
@@ -239,6 +240,7 @@ void getConfigSnapshot(ConfigSnapshot *out) {
   strncpy(out->assistToken, ASSIST_TOKEN, sizeof(out->assistToken) - 1);
   out->assistToken[sizeof(out->assistToken) - 1] = '\0';
   out->simTrackingEnable = SIM_TRACKING_ENABLE;
+  out->wifiApEnable = WIFI_AP_ENABLE;
   strncpy(out->wifiTrackingUrl, WIFI_TRACKING_URL,
           sizeof(out->wifiTrackingUrl) - 1);
   out->wifiTrackingUrl[sizeof(out->wifiTrackingUrl) - 1] = '\0';
@@ -300,6 +302,7 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
   strncpy(ASSIST_TOKEN, snapshot->assistToken, sizeof(ASSIST_TOKEN) - 1);
   ASSIST_TOKEN[sizeof(ASSIST_TOKEN) - 1] = '\0';
   SIM_TRACKING_ENABLE = snapshot->simTrackingEnable;
+  WIFI_AP_ENABLE = snapshot->wifiApEnable;
   strncpy(WIFI_TRACKING_URL, snapshot->wifiTrackingUrl,
           sizeof(WIFI_TRACKING_URL) - 1);
   WIFI_TRACKING_URL[sizeof(WIFI_TRACKING_URL) - 1] = '\0';

@@ -3,6 +3,7 @@
 #include "DATAEG/SIM7680C.h"
 #include "GPS/gps.h"
 #include "Storage/Storage.h"
+#include "WiFiManager/WiFiManager.h"
 #include "geofencing/geofencing.h"
 #include "network_location/location.h"
 #include "tracking/tracking.h"
@@ -61,6 +62,20 @@ input,textarea{width:100%;padding:12px 14px;background:#0b1222;border:1px solid 
 input:focus,textarea:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
 input::placeholder,textarea::placeholder{color:#64748b}
 textarea{resize:vertical;font-family:inherit;min-height:66px}
+fieldset{margin-top:16px;padding:14px;border:1px solid rgba(148,163,184,.18);border-radius:16px;background:rgba(2,6,23,.25)}
+legend{padding:0 8px;font-size:12px;font-weight:800;letter-spacing:.3px;color:#cbd5e1}
+fieldset label{margin:0 0 10px;font-size:13px;color:#cbd5e1;text-transform:none;letter-spacing:0}
+fieldset label:last-child{margin-bottom:0}
+fieldset input{margin-top:6px}
+.tb{display:flex;gap:10px;margin-bottom:16px}
+.tbi{flex:1;padding:10px 14px;border:1px solid rgba(148,163,184,.22);border-radius:12px;background:#0b1222;color:#cbd5e1;font-size:13px;font-weight:800;cursor:pointer}
+.tbi.a{background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#061220;border-color:transparent}
+.pn{display:none}
+.pn.a{display:block}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:14px;border:1px solid rgba(148,163,184,.18);border-radius:16px;background:rgba(2,6,23,.25)}
+.sw b{display:block;font-size:14px;color:#f1f5f9;margin-bottom:4px}
+.sw span{display:block;font-size:12px;color:#94a3b8;line-height:1.35}
+.sw input[type=checkbox]{width:20px;height:20px;padding:0;border:none;border-radius:6px;accent-color:#38bdf8;box-shadow:none}
 .coords{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .bt{display:block;width:100%;padding:14px;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;transition:transform .15s,opacity .15s;letter-spacing:.2px}
 .bt:active{transform:scale(.98)}
@@ -91,6 +106,11 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
 </div>
 
 <div class=mn><div class=cd>
+  <div class=tb>
+    <button class="tbi a" id=tab_main type=button onclick="st('main')">Cấu hình chung</button>
+    <button class=tbi id=tab_track type=button onclick="st('track')">Tracking & Mạng</button>
+  </div>
+  <div class="pn a" data-tab=main>
   <label>Số điện thoại 1</label>
   <input id=p1 type=tel placeholder="Ví dụ: 077xxxxxxx hoặc +84...">
   <label>Số điện thoại 2</label>
@@ -99,6 +119,15 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
   <input id=p3 type=tel placeholder="(tuỳ chọn)">
   <label>Lời nhắn SMS</label>
   <textarea id=ms placeholder="Ví dụ: Tôi cần hỗ trợ khẩn cấp..."></textarea>
+  </div>
+  <div class=pn data-tab=track>
+    <div class=sw>
+      <div>
+        <b>Bật host TV_DEVICE</b>
+        <span>Bật để thiết bị thử kết nối Wifi; Tắt để chỉ giữ AP cục bộ</span>
+      </div>
+      <input id=ap_en type=checkbox>
+    </div>
   <label>WiFi Tracking URL</label>
   <input id=wtrk type=text placeholder="https://your-wifi-host/update">
   <label>SIM Tracking URL</label>
@@ -107,7 +136,38 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
   <input id=relay type=text placeholder="https://your-host/api/geolocate">
   <label>SIM Netloc Relay URL</label>
   <input id=srelay type=text placeholder="https://your-sim-host/api/geolocate">
+  <fieldset>
+    <legend><strong>Tần suất gửi vị trí (giây)</strong></legend>
+    
+    <div class="input-group">
+      <label for="trk_c_mov">🚗 Di chuyển - Trực tiếp:</label>
+      <input id="trk_c_mov" name="trk_c_mov" type="number" min="30" max="86400">
+      <small>(Cập nhật vị trí tức thời khi đang đi)</small>
+    </div>
 
+    <div class="input-group">
+      <label for="trk_c_sta">🅿️ Đứng yên - Trực tiếp:</label>
+      <input id="trk_c_sta" name="trk_c_sta" type="number" min="60" max="86400">
+      <small>(Cập nhật trạng thái khi xe dừng)</small>
+    </div>
+
+    <hr>
+
+    <div class="input-group">
+      <label for="trk_h_mov">📜 Di chuyển - Lịch sử:</label>
+      <input id="trk_h_mov" name="trk_h_mov" type="number" min="60" max="86400">
+      <small>(Độ chi tiết của đường đi khi xem lại)</small>
+    </div>
+
+    <div class="input-group">
+      <label for="trk_h_sta">⏳ Đứng yên - Lịch sử:</label>
+      <input id="trk_h_sta" name="trk_h_sta" type="number" min="300" max="86400">
+      <small>(Lưu điểm dừng khi xem lại nhật ký)</small>
+    </div>
+  </fieldset>
+
+  </div>
+  <div class="pn a" data-tab=main>
   <div class=card2>
     <div class=kv><span>HOME</span><b id=home>Chưa có</b></div>
     <div class=kv><span>Khoảng cách tới HOME</span><b id=dist>--</b></div>
@@ -120,6 +180,7 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
     <div class=sub>• Trạng thái chi tiết (GPS/sóng/cảnh báo) xem ở Serial log.</div>
   </div>
 
+  </div>
   <div class=row>
     <button class="bt bp" id=bs onclick=sv()>Lưu cấu hình</button>
     <button class="bt bh" id=bh onclick=sh() disabled>Lưu HOME</button>
@@ -135,11 +196,12 @@ function toast(m,ok){var t=$('tt');t.textContent=m;t.className='tt '+(ok?'s':'e'
 function N(p){p=(p||'').trim();if(p.charAt(0)==='0'&&p.length>8)return'+84'+p.substring(1);return p}
 function H(){var lat=($('hlat').value||'').trim(),lng=($('hlng').value||'').trim();return lat!==''&&lng!==''}
 function hb(locValid){$('bh').disabled=!(locValid||H())}
+function st(tab){document.querySelectorAll('.pn').forEach(function(el){el.classList.toggle('a',el.getAttribute('data-tab')===tab)});$('tab_main').classList.toggle('a',tab==='main');$('tab_track').classList.toggle('a',tab==='track')}
 function init(){fetch('/config').then(function(r){return r.json()}).then(function(c){
-  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('wtrk').value=c.wtrk_url||'';$('strk').value=c.strk_url||'';$('relay').value=c.nloc_url||'';$('srelay').value=c.snloc_url||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
+  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('ap_en').checked=!!c.ap_en;$('wtrk').value=c.wtrk_url||'';$('strk').value=c.strk_url||'';$('relay').value=c.nloc_url||'';$('srelay').value=c.snloc_url||'';$('trk_c_mov').value=c.trk_c_mov||'';$('trk_c_sta').value=c.trk_c_sta||'';$('trk_h_mov').value=c.trk_h_mov||'';$('trk_h_sta').value=c.trk_h_sta||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
 }).catch(function(){})}
 function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
-  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value)+'&wtrk_url='+encodeURIComponent($('wtrk').value)+'&strk_url='+encodeURIComponent($('strk').value)+'&nloc_url='+encodeURIComponent($('relay').value)+'&snloc_url='+encodeURIComponent($('srelay').value);
+  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value)+'&ap_en='+encodeURIComponent($('ap_en').checked?'1':'0')+'&wtrk_url='+encodeURIComponent($('wtrk').value)+'&strk_url='+encodeURIComponent($('strk').value)+'&nloc_url='+encodeURIComponent($('relay').value)+'&snloc_url='+encodeURIComponent($('srelay').value)+'&trk_c_mov='+encodeURIComponent($('trk_c_mov').value)+'&trk_c_sta='+encodeURIComponent($('trk_c_sta').value)+'&trk_h_mov='+encodeURIComponent($('trk_h_mov').value)+'&trk_h_sta='+encodeURIComponent($('trk_h_sta').value);
   fetch('/save_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d})
     .then(function(r){toast(r.ok?'Đã lưu cấu hình!':'Lỗi lưu cấu hình',r.ok)})
     .catch(function(){toast('Không thể lưu',false)})
@@ -195,36 +257,48 @@ void initFriendlyNamePortal() {
     ConfigSnapshot cfg = {};
     getConfigSnapshot(&cfg);
 
-    String j = "{\"c1\":\"" + jsonEsc(cfg.call1) +
-               "\","
-               "\"c2\":\"" +
-               jsonEsc(cfg.call2) +
-               "\","
-               "\"c3\":\"" +
-               jsonEsc(cfg.call3) +
-               "\","
-               "\"sms\":\"" +
-               jsonEsc(cfg.smsTemplate) +
-               "\","
-               "\"wtrk_url\":\"" +
-               jsonEsc(cfg.wifiTrackingUrl) +
-               "\","
-               "\"strk_url\":\"" +
-               jsonEsc(cfg.simTrackingUrl) +
-               "\","
-               "\"nloc_url\":\"" +
-               jsonEsc(cfg.netlocRelayUrl) +
-               "\","
-               "\"snloc_url\":\"" +
-               jsonEsc(cfg.simNetlocRelayUrl) +
-               "\","
-               "\"home\":" +
-               String((cfg.homeLat != 0 || cfg.homeLng != 0) ? "true" : "false") +
-               ",\"home_lat\":" + String(cfg.homeLat, 6) +
-               ",\"home_lng\":" + String(cfg.homeLng, 6) +
-               ",\"geo_en\":" + String(cfg.geofenceEnable ? "true" : "false") +
-               ",\"geo_rad\":" + String(cfg.geofenceRadiusM) +
-               "}";
+    String j =
+        "{\"c1\":\"" + jsonEsc(cfg.call1) +
+        "\","
+        "\"c2\":\"" +
+        jsonEsc(cfg.call2) +
+        "\","
+        "\"c3\":\"" +
+        jsonEsc(cfg.call3) +
+        "\","
+        "\"sms\":\"" +
+        jsonEsc(cfg.smsTemplate) +
+        "\","
+        "\"wtrk_url\":\"" +
+        jsonEsc(cfg.wifiTrackingUrl) +
+        "\","
+        "\"strk_url\":\"" +
+        jsonEsc(cfg.simTrackingUrl) +
+        "\","
+        "\"nloc_url\":\"" +
+        jsonEsc(cfg.netlocRelayUrl) +
+        "\","
+        "\"snloc_url\":\"" +
+        jsonEsc(cfg.simNetlocRelayUrl) +
+        "\","
+        "\"ap_en\":" +
+        String(cfg.wifiApEnable ? "true" : "false") +
+        ","
+        "\"trk_c_mov\":" +
+        String(cfg.trackingCurrentMovingIntervalMs / 1000UL) +
+        ",\"trk_c_sta\":" +
+        String(cfg.trackingCurrentStationaryIntervalMs / 1000UL) +
+        ",\"trk_h_mov\":" +
+        String(cfg.trackingHistoryMovingIntervalMs / 1000UL) +
+        ",\"trk_h_sta\":" +
+        String(cfg.trackingHistoryStationaryIntervalMs / 1000UL) +
+        ","
+        "\"home\":" +
+        String((cfg.homeLat != 0 || cfg.homeLng != 0) ? "true" : "false") +
+        ",\"home_lat\":" + String(cfg.homeLat, 6) +
+        ",\"home_lng\":" + String(cfg.homeLng, 6) +
+        ",\"geo_en\":" + String(cfg.geofenceEnable ? "true" : "false") +
+        ",\"geo_rad\":" + String(cfg.geofenceRadiusM) + "}";
     r->send(200, "application/json", j);
   });
 
@@ -232,6 +306,20 @@ void initFriendlyNamePortal() {
   server.on("/save_config", HTTP_POST, [](AsyncWebServerRequest *r) {
     auto val = [&](const char *n) -> String {
       return r->hasParam(n, true) ? r->getParam(n, true)->value() : String("");
+    };
+    auto parseIntervalSec = [&](const char *name, unsigned long minSec,
+                                unsigned long maxSec) -> unsigned long {
+      if (!r->hasParam(name, true))
+        return 0;
+      long v = val(name).toInt();
+      if (v <= 0)
+        return 0;
+      unsigned long clamped = static_cast<unsigned long>(v);
+      if (clamped < minSec)
+        clamped = minSec;
+      if (clamped > maxSec)
+        clamped = maxSec;
+      return clamped;
     };
 
     ConfigSnapshot cfg = {};
@@ -244,6 +332,7 @@ void initFriendlyNamePortal() {
     cfg.call3[sizeof(cfg.call3) - 1] = '\0';
     strncpy(cfg.smsTemplate, val("sms").c_str(), sizeof(cfg.smsTemplate) - 1);
     cfg.smsTemplate[sizeof(cfg.smsTemplate) - 1] = '\0';
+    cfg.wifiApEnable = val("ap_en") != "0";
     strncpy(cfg.wifiTrackingUrl, val("wtrk_url").c_str(),
             sizeof(cfg.wifiTrackingUrl) - 1);
     cfg.wifiTrackingUrl[sizeof(cfg.wifiTrackingUrl) - 1] = '\0';
@@ -256,21 +345,59 @@ void initFriendlyNamePortal() {
     strncpy(cfg.simNetlocRelayUrl, val("snloc_url").c_str(),
             sizeof(cfg.simNetlocRelayUrl) - 1);
     cfg.simNetlocRelayUrl[sizeof(cfg.simNetlocRelayUrl) - 1] = '\0';
-    applyConfigSnapshot(&cfg);
+
+    unsigned long cMovSec = parseIntervalSec("trk_c_mov", 30, 86400);
+    unsigned long cStaSec = parseIntervalSec("trk_c_sta", 60, 86400);
+    unsigned long hMovSec = parseIntervalSec("trk_h_mov", 60, 86400);
+    unsigned long hStaSec = parseIntervalSec("trk_h_sta", 300, 86400);
+
+    if (cMovSec > 0) {
+      cfg.trackingCurrentMovingIntervalMs = cMovSec * 1000UL;
+    }
+    if (cStaSec > 0) {
+      cfg.trackingCurrentStationaryIntervalMs = cStaSec * 1000UL;
+    }
+    if (hMovSec > 0) {
+      cfg.trackingHistoryMovingIntervalMs = hMovSec * 1000UL;
+    }
+    if (hStaSec > 0) {
+      cfg.trackingHistoryStationaryIntervalMs = hStaSec * 1000UL;
+    }
 
     // Save only edited fields to NVS
     nvs_set_str(nvsHandle, "CALL_1", cfg.call1);
     nvs_set_str(nvsHandle, "CALL_2", cfg.call2);
     nvs_set_str(nvsHandle, "CALL_3", cfg.call3);
     nvs_set_str(nvsHandle, "SMS_TPL", cfg.smsTemplate);
+    nvs_set_u8(nvsHandle, "WIFI_AP_EN", cfg.wifiApEnable ? 1 : 0);
     nvs_set_str(nvsHandle, "WTRK_URL", cfg.wifiTrackingUrl);
     nvs_set_str(nvsHandle, "STRK_URL", cfg.simTrackingUrl);
     nvs_set_str(nvsHandle, "NLOC_URL", cfg.netlocRelayUrl);
     nvs_set_str(nvsHandle, "SNLOC_URL", cfg.simNetlocRelayUrl);
+    if (cMovSec > 0) {
+      nvs_set_i32(nvsHandle, "TRK_C_MOV",
+                  static_cast<int32_t>(cfg.trackingCurrentMovingIntervalMs));
+    }
+    if (cStaSec > 0) {
+      nvs_set_i32(
+          nvsHandle, "TRK_C_STA",
+          static_cast<int32_t>(cfg.trackingCurrentStationaryIntervalMs));
+    }
+    if (hMovSec > 0) {
+      nvs_set_i32(nvsHandle, "TRK_H_MOV",
+                  static_cast<int32_t>(cfg.trackingHistoryMovingIntervalMs));
+    }
+    if (hStaSec > 0) {
+      nvs_set_i32(
+          nvsHandle, "TRK_H_STA",
+          static_cast<int32_t>(cfg.trackingHistoryStationaryIntervalMs));
+    }
     nvs_commit(nvsHandle);
+    applyConfigSnapshot(&cfg);
+    wifiRestoreApStaMode();
 
-    logPrintf("[PORTAL] Saved: C1=%s C2=%s C3=%s", cfg.call1, cfg.call2,
-              cfg.call3);
+    logPrintf("[PORTAL] Saved: C1=%s C2=%s C3=%s AP_HOST=%s", cfg.call1,
+              cfg.call2, cfg.call3, cfg.wifiApEnable ? "ON" : "OFF");
     r->send(200, "text/plain", "OK");
   });
 
@@ -281,7 +408,8 @@ void initFriendlyNamePortal() {
     if (hasLat || hasLng) {
       if (!(hasLat && hasLng)) {
         r->send(200, "application/json",
-                "{\"ok\":false,\"msg\":\"C\u1ea7n nh\u1eadp \u0111\u1ee7 lat v\u00e0 lng\"}");
+                "{\"ok\":false,\"msg\":\"C\u1ea7n nh\u1eadp \u0111\u1ee7 lat "
+                "v\u00e0 lng\"}");
         return;
       }
       const String latStr = r->getParam("lat", true)->value();
@@ -293,7 +421,8 @@ void initFriendlyNamePortal() {
                          !(lat == 0.0 && lng == 0.0);
       if (!valid) {
         r->send(200, "application/json",
-                "{\"ok\":false,\"msg\":\"T\u1ecda \u0111\u1ed9 HOME kh\u00f4ng h\u1ee3p l\u1ec7\"}");
+                "{\"ok\":false,\"msg\":\"T\u1ecda \u0111\u1ed9 HOME kh\u00f4ng "
+                "h\u1ee3p l\u1ec7\"}");
         return;
       }
       saveHomeLocation(lat, lng);
@@ -303,7 +432,9 @@ void initFriendlyNamePortal() {
 
     BestLocationResult loc = getBestAvailableLocation();
     if (!loc.valid) {
-      r->send(200, "application/json", "{\"ok\":false,\"msg\":\"Kh\u00f4ng c\u00f3 v\u1ecb tr\u00ed h\u1ee3p l\u1ec7\"}");
+      r->send(200, "application/json",
+              "{\"ok\":false,\"msg\":\"Kh\u00f4ng c\u00f3 v\u1ecb tr\u00ed "
+              "h\u1ee3p l\u1ec7\"}");
       return;
     }
     if (loc.lat == 0 && loc.lng == 0) {
@@ -334,20 +465,19 @@ void initFriendlyNamePortal() {
       dist = calculateDistance(lat, lng, cfg.homeLat, cfg.homeLng);
 
     char buf[384];
-    snprintf(buf, sizeof(buf),
-             "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
-             "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
-             "\"geo_en\":%s,\"geo_rad\":%d,"
-             "\"loc_valid\":%s,\"loc_src\":\"%s\","
-             "\"loc_acc\":%.1f,\"loc_age\":%lu,"
-             "\"lat\":%.6f,\"lng\":%.6f}",
-             fix ? "true" : "false", sats, dist, telem.signal4G,
-             telem.signalWiFi, hasHome ? "true" : "false",
-             cfg.geofenceEnable ? "true" : "false", cfg.geofenceRadiusM,
-             locValid ? "true" : "false",
-             locValid ? locationSourceName(loc.source) : "none",
-             locValid ? loc.accuracyM : 0.0f, locValid ? loc.ageMs : 0UL, lat,
-             lng);
+    snprintf(
+        buf, sizeof(buf),
+        "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
+        "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
+        "\"geo_en\":%s,\"geo_rad\":%d,"
+        "\"loc_valid\":%s,\"loc_src\":\"%s\","
+        "\"loc_acc\":%.1f,\"loc_age\":%lu,"
+        "\"lat\":%.6f,\"lng\":%.6f}",
+        fix ? "true" : "false", sats, dist, telem.signal4G, telem.signalWiFi,
+        hasHome ? "true" : "false", cfg.geofenceEnable ? "true" : "false",
+        cfg.geofenceRadiusM, locValid ? "true" : "false",
+        locValid ? locationSourceName(loc.source) : "none",
+        locValid ? loc.accuracyM : 0.0f, locValid ? loc.ageMs : 0UL, lat, lng);
     r->send(200, "application/json", buf);
   });
 
@@ -382,7 +512,8 @@ void initFriendlyNamePortal() {
   if (portalApActive()) {
     logLine("[PORTAL] AP provisioning mode: http://192.168.4.1");
   } else if (WiFi.status() == WL_CONNECTED) {
-    logPrintf("[PORTAL] STA mode: http://%s/", WiFi.localIP().toString().c_str());
+    logPrintf("[PORTAL] STA mode: http://%s/",
+              WiFi.localIP().toString().c_str());
   } else {
     logLine("[PORTAL] Started without AP; waiting for STA connectivity");
   }

@@ -141,6 +141,16 @@ static void cacheWiFiScanDebug(const wifi_ap_record_t *records, uint16_t count,
   LAST_WIFI_SCAN_JSON = json;
 }
 
+static void clearWiFiFingerprintCache() {
+  LAST_WIFI_SCAN_JSON = "{\"ok\":false,\"count\":0,\"aps\":[]}";
+  LAST_WIFI_SCAN_COMPACT = "";
+  LAST_WIFI_SCAN_GOOGLE_JSON = "";
+  LAST_WIFI_SCAN_UNWIRED_JSON = "";
+  LAST_WIFI_SCAN_MS = 0;
+  LAST_WIFI_SCAN_COUNT = 0;
+  WiFi.scanDelete();
+}
+
 static bool hasUsableCachedWiFiScan() {
   return LAST_WIFI_SCAN_COUNT >= 2 &&
          (millis() - LAST_WIFI_SCAN_MS) <= WIFI_SCAN_CACHE_MS &&
