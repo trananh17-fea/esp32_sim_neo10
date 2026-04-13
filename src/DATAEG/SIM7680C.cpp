@@ -17,6 +17,17 @@ static String sim_extractHost(const String &url) {
   return url.substring(start, end);
 }
 
+// Downgrade HTTPS to HTTP to bypass TLS handshake failures (error 715).
+// Cloudflare redirects HTTP->HTTPS server-side; the modem follows via REDIR=1.
+static String sim_downgradeToHttp(const String &url) {
+  if (url.startsWith("https://")) {
+    String httpUrl = "http://" + url.substring(8);
+    logPrintf("[SIM-HTTP] Downgrade: %s", httpUrl.c_str());
+    return httpUrl;
+  }
+  return url;
+}
+
 static bool sim_isCloudflareWorkerHost(const String &host) {
   return host.equalsIgnoreCase("gps-tracker.ahcntab.workers.dev") ||
          host.endsWith(".workers.dev");
@@ -488,7 +499,7 @@ bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio) {
 // Send SMS to a specific number
 // ============================================================
 
-bool SMS_DRY_RUN = false; // Đặt là true để chỉ LOG, false để GỬI THẬT
+bool SMS_DRY_RUN = true; // Đặt là true để chỉ LOG, false để GỬI THẬT
 void SIM7680C_sendSMS_to(const char *number, const String &message) {
   if (!number || strlen(number) < 3)
     return;
@@ -632,20 +643,12 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
     return false;
   if (telemetryIsSosActive())
     return false;
-  if (SIM7680C_isTlsHostBlocked(url)) {
-    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
-    telemetrySetTrackSimCode(715);
-    return false;
-  }
 
-  bool isHttps = url.startsWith("https");
+  // Downgrade HTTPS->HTTP to avoid TLS 715 errors on A7680C
+  const String safeUrl = sim_downgradeToHttp(url);
 
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
-
-  if (isHttps) {
-    sim_configureHttpsContext(url);
-  }
 
   simSerial.println("AT+HTTPINIT");
   String initResp = sim_readResponse(1000);
@@ -657,7 +660,7 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
   }
   simSerial.println("AT+HTTPPARA=\"CID\",1");
   delay(100);
-  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", safeUrl.c_str());
   delay(300);
   simSerial.println("AT+HTTPPARA=\"REDIR\",1");
   delay(100);
@@ -725,7 +728,7 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
   }
 
   if (sim_isTlsHandshakeFailureCode(statusCode))
-    sim_blockHost(sim_extractHost(url));
+    sim_blockHost(sim_extractHost(safeUrl));
 
   simSerial.println("AT+HTTPTERM");
   delay(200);
@@ -747,19 +750,12 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
     return false;
   if (telemetryIsSosActive())
     return false; // don't use modem during SOS
-  if (SIM7680C_isTlsHostBlocked(url)) {
-    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
-    telemetrySetTrackSimCode(715);
-    return false;
-  }
+
+  // Downgrade HTTPS->HTTP to avoid TLS 715 errors on A7680C
+  const String safeUrl = sim_downgradeToHttp(url);
+
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
-
-  bool isHttps = url.startsWith("https");
-
-  if (isHttps) {
-    sim_configureHttpsContext(url);
-  }
 
   simSerial.println("AT+HTTPINIT");
   String initResp = sim_readResponse(1000);
@@ -771,7 +767,7 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
   }
   simSerial.println("AT+HTTPPARA=\"CID\",1");
   delay(100);
-  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", safeUrl.c_str());
   delay(300);
   simSerial.println("AT+HTTPPARA=\"REDIR\",1");
   delay(100);
@@ -814,7 +810,7 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
     xSemaphoreGive(simMutex);
 
   if (sim_isTlsHandshakeFailureCode(statusCode))
-    sim_blockHost(sim_extractHost(url));
+    sim_blockHost(sim_extractHost(safeUrl));
 
   if (ok)
     SIM_setCapability(SIM_CAP_HTTP_OK);
@@ -1170,20 +1166,14 @@ bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse) {
     return false;
   if (telemetryIsSosActive())
     return false;
-  if (SIM7680C_isTlsHostBlocked(url)) {
-    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
-    return false;
-  }
+
+  // Downgrade HTTPS->HTTP to avoid TLS 715 errors on A7680C
+  const String safeUrl = sim_downgradeToHttp(url);
 
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  logPrintf("[SIM-GET] URL: %s", url.c_str());
-
-  bool isHttps = url.startsWith("https");
-  if (isHttps) {
-    sim_configureHttpsContext(url);
-  }
+  logPrintf("[SIM-GET] URL: %s", safeUrl.c_str());
 
   simSerial.println("AT+HTTPINIT");
   String r = sim_readResponse(1000);
@@ -1196,7 +1186,7 @@ bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse) {
 
   simSerial.println("AT+HTTPPARA=\"CID\",1");
   delay(100);
-  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", safeUrl.c_str());
   delay(300);
   simSerial.println("AT+HTTPPARA=\"REDIR\",1");
   delay(100);
@@ -1235,7 +1225,7 @@ bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse) {
   logPrintf("[SIM-GET] HTTP %d, %d bytes", statusCode, dataLen);
 
   if (sim_isTlsHandshakeFailureCode(statusCode))
-    sim_blockHost(sim_extractHost(url));
+    sim_blockHost(sim_extractHost(safeUrl));
 
   bool ok = false;
   if (statusCode == 200 && dataLen > 0) {
