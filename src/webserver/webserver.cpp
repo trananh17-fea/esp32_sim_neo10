@@ -17,9 +17,27 @@ static AsyncWebServer server(80);
 static DNSServer dnsServer;
 static const byte DNS_PORT = 53;
 static IPAddress apIP(192, 168, 4, 1);
+static bool dnsServerStarted = false;
 
 static bool portalApActive() {
   return (WiFi.getMode() & WIFI_MODE_AP) != 0 && WiFi.softAPIP() != IPAddress();
+}
+
+static void syncPortalDnsState() {
+  const bool apActive = portalApActive();
+
+  if (apActive && !dnsServerStarted) {
+    dnsServer.start(DNS_PORT, "*", apIP);
+    dnsServerStarted = true;
+    logLine("[PORTAL] Captive DNS started");
+    return;
+  }
+
+  if (!apActive && dnsServerStarted) {
+    dnsServer.stop();
+    dnsServerStarted = false;
+    logLine("[PORTAL] Captive DNS stopped");
+  }
 }
 
 // ============================================================
@@ -86,8 +104,10 @@ fieldset input{margin-top:6px}
 .bh{background:linear-gradient(135deg,#60a5fa,#38bdf8);color:#061220;box-shadow:0 2px 14px rgba(56,189,248,.18)}
 .card2{margin-top:14px;padding:14px;border-radius:16px;background:rgba(2,6,23,.35);border:1px solid rgba(148,163,184,.12)}
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#cbd5e1;margin-top:8px}
+.kv span{min-width:92px}
 .kv:first-child{margin-top:0}
 .kv b{color:#f1f5f9}
+.kv b.addr{font-size:12px;text-align:right;word-break:break-word}
 .sub{font-size:12px;color:#94a3b8;margin-top:10px;line-height:1.35}
 .hn{font-size:12px;color:#94a3b8;margin-top:12px;text-align:center}
 .tt{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-110px);padding:12px 26px;border-radius:14px;font-size:14px;font-weight:900;z-index:99;transition:transform .35s cubic-bezier(.34,1.56,.64,1);pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.45)}
@@ -106,6 +126,12 @@ fieldset input{margin-top:6px}
 </div>
 
 <div class=mn><div class=cd>
+  <div class=card2>
+    <div class=kv><span>Portal AP</span><b class="addr" id=apurl>http://192.168.4.1/</b></div>
+    <div class=kv><span>Portal LAN</span><b class="addr" id=staurl>http://neo10.local/</b></div>
+    <div class=kv><span>IP LAN</span><b class="addr" id=staip>Dang doi WiFi...</b></div>
+    <div class=sub id=netnote>Neu da tat host TV_DEVICE, hay vao cung WiFi voi router va thu mo neo10.local. Luu y: hotspot dien thoai thuong khong chay mDNS/.local giua cac client, luc do phai dung IP LAN o dong tren.</div>
+  </div>
   <div class=tb>
     <button class="tbi a" id=tab_main type=button onclick="st('main')">Cấu hình chung</button>
     <button class=tbi id=tab_track type=button onclick="st('track')">Tracking & Mạng</button>
@@ -136,34 +162,62 @@ fieldset input{margin-top:6px}
   <input id=relay type=text placeholder="https://your-host/api/geolocate">
   <label>SIM Netloc Relay URL</label>
   <input id=srelay type=text placeholder="https://your-sim-host/api/geolocate">
-  <fieldset>
-    <legend><strong>Tần suất gửi vị trí (giây)</strong></legend>
+    <fieldset>
+      <style>
+    .setup-container {
+      font-family: sans-serif;
+      max-width: 400px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    .setting-item {
+      margin-bottom: 20px;
+    }
+    .setting-item label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+    }
+    .setting-item small {
+      color: #666;
+      display: block;
+      margin-bottom: 8px;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box; /* Giúp input không bị tràn */
+    }
+    .divider {
+      border-top: 1px solid #eee;
+      margin: 15px 0;
+    }
+  </style>
+
+  <div class="setup-container">
+    <h3 style="margin-top:0">⚙️ Cài đặt định vị</h3>
     
-    <div class="input-group">
-      <label for="trk_c_mov">🚗 Di chuyển - Trực tiếp:</label>
-      <input id="trk_c_mov" name="trk_c_mov" type="number" min="30" max="86400">
-      <small>(Cập nhật vị trí tức thời khi đang đi)</small>
+    <div class="setting-item">
+      <label>🚗 Khi xe đang chạy</label>
+      <small>Cập nhật vị trí sau mỗi (giây):</small>
+      <input type="number" placeholder="Ví dụ: 30" min="30">
+      <small><i>(Càng nhỏ thì xem lại lộ trình càng chi tiết)</i></small>
     </div>
 
-    <div class="input-group">
-      <label for="trk_c_sta">🅿️ Đứng yên - Trực tiếp:</label>
-      <input id="trk_c_sta" name="trk_c_sta" type="number" min="60" max="86400">
-      <small>(Cập nhật trạng thái khi xe dừng)</small>
-    </div>
+    <div class="divider"></div>
 
-    <hr>
-
-    <div class="input-group">
-      <label for="trk_h_mov">📜 Di chuyển - Lịch sử:</label>
-      <input id="trk_h_mov" name="trk_h_mov" type="number" min="60" max="86400">
-      <small>(Độ chi tiết của đường đi khi xem lại)</small>
+    <div class="setting-item">
+      <label>🅿️ Khi xe đứng yên</label>
+      <small>Cập nhật trạng thái sau mỗi (giây):</small>
+      <input type="number" placeholder="Ví dụ: 600" min="60">
+      <small><i>(Nên để số lớn để tiết kiệm Pin cho thiết bị)</i></small>
     </div>
-
-    <div class="input-group">
-      <label for="trk_h_sta">⏳ Đứng yên - Lịch sử:</label>
-      <input id="trk_h_sta" name="trk_h_sta" type="number" min="300" max="86400">
-      <small>(Lưu điểm dừng khi xem lại nhật ký)</small>
-    </div>
+  </div>
   </fieldset>
 
   </div>
@@ -173,8 +227,8 @@ fieldset input{margin-top:6px}
     <div class=kv><span>Khoảng cách tới HOME</span><b id=dist>--</b></div>
     <div class=kv><span>Geofence</span><b id=geo>--</b></div>
     <div class=coords>
-      <input id=hlat type=number step=any placeholder="Home lat vÃ­ dá»¥ 10.901146">
-      <input id=hlng type=number step=any placeholder="Home lng vÃ­ dá»¥ 106.806184">
+      <input id=hlat type=number step=any placeholder="Home lat">
+      <input id=hlng type=number step=any placeholder="Home lng">
     </div>
     <div class=sub>• <b>Lưu HOME</b> sẽ lấy vị trí hiện tại làm “nhà” (ưu tiên GPS > WiFi > Cell).</div>
     <div class=sub>• Trạng thái chi tiết (GPS/sóng/cảnh báo) xem ở Serial log.</div>
@@ -235,6 +289,10 @@ function poll(){fetch('/status').then(function(r){return r.json()}).then(functio
   $('home').textContent=s.has_home?'Đã có':'Chưa có';
   $('dist').textContent=dOk?(Math.round(s.dist)+' m'):'--';
   $('geo').textContent=s.geo_en?('Bật • bán kính '+s.geo_rad+'m'):'Tắt';
+  $('apurl').textContent=s.ap_on?s.ap_url:'AP đang tắt';
+  $('staurl').textContent=s.sta_url||('http://'+s.sta_host+'/');
+  $('staip').textContent=s.sta_ip||'Chưa có IP STA';
+  $('netnote').textContent=s.sta_ok?('Truy cập nhanh bằng '+s.sta_host+' trên cùng mạng LAN. Nếu đang qua hotspot điện thoại hoặc máy không hỗ trợ mDNS/.local, dùng IP '+s.sta_ip):'STA chưa kết nối router. Nếu AP đang bật thì vào http://192.168.4.1/';
   hb(s.loc_valid);
 }).catch(function(){})}
 ['hlat','hlng'].forEach(function(id){$(id).addEventListener('input',function(){hb(false)})});
@@ -244,8 +302,7 @@ init();poll();setInterval(poll,2000);
 
 // ============================================================
 void initFriendlyNamePortal() {
-  if (portalApActive())
-    dnsServer.start(DNS_PORT, "*", apIP);
+  syncPortalDnsState();
 
   // --- Main page ---
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *r) {
@@ -463,21 +520,32 @@ void initFriendlyNamePortal() {
     double dist = -1;
     if (hasHome && locValid && (lat != 0 || lng != 0))
       dist = calculateDistance(lat, lng, cfg.homeLat, cfg.homeLng);
+    const bool apOn = portalApActive();
+    const bool staOk = WiFi.status() == WL_CONNECTED;
+    const String staHost = wifiStaHostnameFqdn();
+    const String staUrl = wifiStaHostnameUrl();
+    const String staIp = wifiStaIpString();
 
-    char buf[384];
-    snprintf(
-        buf, sizeof(buf),
-        "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
-        "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
-        "\"geo_en\":%s,\"geo_rad\":%d,"
-        "\"loc_valid\":%s,\"loc_src\":\"%s\","
-        "\"loc_acc\":%.1f,\"loc_age\":%lu,"
-        "\"lat\":%.6f,\"lng\":%.6f}",
-        fix ? "true" : "false", sats, dist, telem.signal4G, telem.signalWiFi,
-        hasHome ? "true" : "false", cfg.geofenceEnable ? "true" : "false",
-        cfg.geofenceRadiusM, locValid ? "true" : "false",
-        locValid ? locationSourceName(loc.source) : "none",
-        locValid ? loc.accuracyM : 0.0f, locValid ? loc.ageMs : 0UL, lat, lng);
+    char buf[768];
+    snprintf(buf, sizeof(buf),
+             "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
+             "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
+             "\"geo_en\":%s,\"geo_rad\":%d,"
+             "\"loc_valid\":%s,\"loc_src\":\"%s\","
+             "\"loc_acc\":%.1f,\"loc_age\":%lu,"
+             "\"lat\":%.6f,\"lng\":%.6f,"
+             "\"ap_on\":%s,\"ap_url\":\"%s\","
+             "\"sta_ok\":%s,\"sta_host\":\"%s\","
+             "\"sta_url\":\"%s\",\"sta_ip\":\"%s\"}",
+             fix ? "true" : "false", sats, dist, telem.signal4G,
+             telem.signalWiFi, hasHome ? "true" : "false",
+             cfg.geofenceEnable ? "true" : "false", cfg.geofenceRadiusM,
+             locValid ? "true" : "false",
+             locValid ? locationSourceName(loc.source) : "none",
+             locValid ? loc.accuracyM : 0.0f, locValid ? loc.ageMs : 0UL, lat,
+             lng, apOn ? "true" : "false", apOn ? "http://192.168.4.1/" : "",
+             staOk ? "true" : "false", staHost.c_str(), staUrl.c_str(),
+             staIp.c_str());
     r->send(200, "application/json", buf);
   });
 
@@ -512,7 +580,7 @@ void initFriendlyNamePortal() {
   if (portalApActive()) {
     logLine("[PORTAL] AP provisioning mode: http://192.168.4.1");
   } else if (WiFi.status() == WL_CONNECTED) {
-    logPrintf("[PORTAL] STA mode: http://%s/",
+    logPrintf("[PORTAL] STA mode: %s  (IP %s)", wifiStaHostnameUrl().c_str(),
               WiFi.localIP().toString().c_str());
   } else {
     logLine("[PORTAL] Started without AP; waiting for STA connectivity");
@@ -520,6 +588,7 @@ void initFriendlyNamePortal() {
 }
 
 void loopFriendlyNamePortal() {
-  if (portalApActive())
+  syncPortalDnsState();
+  if (dnsServerStarted)
     dnsServer.processNextRequest();
 }

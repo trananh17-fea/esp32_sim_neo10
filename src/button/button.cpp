@@ -2,10 +2,16 @@
 #include "Config.h"
 #include "DATAEG/SIM7680C.h"
 #include "GPS/gps.h"
+#include "WiFiManager/WiFiManager.h"
 #include "buzzer/buzzer.h"
 
 static TaskHandle_t sSosTaskHandle = NULL;
 static TaskHandle_t sBuzzerTaskHandle = NULL;
+static constexpr unsigned long kShortClickMinMs = 60;
+static constexpr unsigned long kShortClickMaxMs = 400;
+static constexpr unsigned long kMultiClickGapMs = 400;
+static constexpr int kSilentSosClickCount = 2;
+static constexpr int kToggleApClickCount = 5;
 
 static void sosTask(void *pvParameters) {
   ConfigSnapshot cfg = {};
@@ -97,6 +103,35 @@ static void cancelSosAndStopBuzzer() {
   }
 }
 
+static void toggleProvisioningAp() {
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+  cfg.wifiApEnable = !cfg.wifiApEnable;
+
+  nvs_set_u8(nvsHandle, "WIFI_AP_EN", cfg.wifiApEnable ? 1 : 0);
+  esp_err_t err = nvs_commit(nvsHandle);
+  if (err != ESP_OK) {
+    logPrintf("[Button] 5 Click -> save AP host failed (%d)", (int)err);
+    return;
+  }
+
+  applyConfigSnapshot(&cfg);
+  wifiRestoreApStaMode();
+  logPrintf("[Button] 5 Click -> AP host %s", cfg.wifiApEnable ? "ON" : "OFF");
+}
+
+static void handleMultiClickAction(int clickCount) {
+  if (clickCount >= kToggleApClickCount) {
+    toggleProvisioningAp();
+    return;
+  }
+
+  if (clickCount == kSilentSosClickCount) {
+    logLine("[Button] Double Click -> SOS Silent (SMS + CALL)");
+    startSosTask(false);
+  }
+}
+
 void buttonTask(void *pvParameters) {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   bool lastState = HIGH;
@@ -107,45 +142,33 @@ void buttonTask(void *pvParameters) {
   while (true) {
     bool currentState = digitalRead(BUTTON_PIN);
 
-    // Phát hiện nhấn xuống
     if (currentState == LOW && lastState == HIGH) {
       pressedTime = millis();
     }
 
-    // Phát hiện thả nút
     if (currentState == HIGH && lastState == LOW) {
       unsigned long duration = millis() - pressedTime;
 
-      // 1. Logic Nhấn giữ (Hold) - Ưu tiên hàng đầu
       if (duration >= 1000 && duration <= 3000) {
         logLine("[Button] Hold 1-3s -> SOS + BUZZER");
-        startSosTask(true); // Có còi
+        startSosTask(true);
         clickCount = 0;
       } else if (duration > 3000) {
         logLine("[Button] Hold >3s -> CANCEL SOS");
         cancelSosAndStopBuzzer();
         clickCount = 0;
-      }
-      // 2. Logic Nhấn ngắn (Click)
-      else if (duration >= 60 && duration < 400) {
+      } else if (duration >= kShortClickMinMs && duration < kShortClickMaxMs) {
         unsigned long gap = millis() - lastReleaseTime;
-        if (gap < 400) { // doubleClickGapMs
+        if (gap < kMultiClickGapMs)
           clickCount++;
-        } else {
+        else
           clickCount = 1;
-        }
         lastReleaseTime = millis();
-
-        if (clickCount == 2) {
-          logLine("[Button] Double Click -> SOS Silent (SMS + CALL)");
-          startSosTask(false); // Không còi
-          clickCount = 0;
-        }
       }
     }
 
-    // Reset clickCount nếu quá thời gian chờ nhấn lần 2
-    if (clickCount > 0 && (millis() - lastReleaseTime) > 400) {
+    if (clickCount > 0 && (millis() - lastReleaseTime) > kMultiClickGapMs) {
+      handleMultiClickAction(clickCount);
       clickCount = 0;
     }
 

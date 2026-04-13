@@ -1,12 +1,15 @@
 #include "WiFiManager.h"
 #include "Config.h"
 #include "server.h"
+#include <ESPmDNS.h>
 #include <time.h>
 
 static constexpr const char *AP_SSID = "TV_DEVICE";
 static constexpr const char *AP_PASS = "123456788";
+static constexpr const char *STA_HOSTNAME = "neo10";
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_MASK(255, 255, 255, 0);
+static bool mdnsStarted = false;
 
 static bool staCredentialsConfigured() { return strlen(SSID_Name) > 0; }
 
@@ -24,6 +27,31 @@ static void stopSta(bool powerOffRadio) {
   delay(120);
 }
 
+static void stopMdns() {
+  if (!mdnsStarted)
+    return;
+  MDNS.end();
+  mdnsStarted = false;
+}
+
+static void startMdnsIfReady() {
+  if (WiFi.status() != WL_CONNECTED)
+    return;
+
+  if (mdnsStarted)
+    stopMdns();
+
+  if (!MDNS.begin(STA_HOSTNAME)) {
+    Serial.printf("[WIFI] mDNS start failed for %s.local\n", STA_HOSTNAME);
+    return;
+  }
+
+  MDNS.addService("http", "tcp", 80);
+  mdnsStarted = true;
+  Serial.printf("[WIFI] mDNS ready: http://%s.local/ (neu mang ho tro mDNS)\n",
+                STA_HOSTNAME);
+}
+
 static void configureSoftAp() {
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   if (WiFi.softAP(AP_SSID, AP_PASS, 6, 0))
@@ -34,6 +62,8 @@ static void configureSoftAp() {
 }
 
 static void startStaConnect() {
+  stopMdns();
+  WiFi.setHostname(STA_HOSTNAME);
   Serial.printf("[WIFI] STA connecting to '%s'...\n", SSID_Name);
   WiFi.begin(SSID_Name, SSID_Password);
 }
@@ -46,6 +76,7 @@ static void onWiFiEvent(WiFiEvent_t event) {
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     Serial.printf("[WIFI] STA connected, IP: %s\n",
                   WiFi.localIP().toString().c_str());
+    startMdnsIfReady();
     configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
     Serial.println("[WIFI] SNTP sync requested");
     break;
@@ -55,6 +86,7 @@ static void onWiFiEvent(WiFiEvent_t event) {
                   WiFi.softAPIP().toString().c_str());
     break;
   case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    stopMdns();
     Serial.println("[WIFI] STA disconnected");
     break;
   default:
@@ -107,9 +139,12 @@ void initWiFi() {
     Serial.println("\n[WIFI] STA failed");
   else
     Serial.println("\n[WIFI] AP-only mode active");
+
+  startMdnsIfReady();
 }
 
 void wifiEnterScanMode() {
+  stopMdns();
   WiFi.setAutoReconnect(false);
   WiFi.disconnect(true, false);
   delay(100);
@@ -120,6 +155,7 @@ void wifiEnterScanMode() {
 }
 
 void wifiRestoreApStaMode() {
+  stopMdns();
   if (shouldStartSta() && shouldStartAp()) {
     Serial.println("[WIFI] Reconfiguring WiFi: AP+STA");
     WiFi.mode(WIFI_MODE_APSTA);
@@ -146,4 +182,18 @@ void wifiRestoreApStaMode() {
   WiFi.mode(WIFI_MODE_AP);
   WiFi.setSleep(WIFI_PS_MIN_MODEM);
   configureSoftAp();
+}
+
+const char *wifiStaHostname() { return STA_HOSTNAME; }
+
+String wifiStaHostnameFqdn() { return String(STA_HOSTNAME) + ".local"; }
+
+String wifiStaHostnameUrl() {
+  return String("http://") + wifiStaHostnameFqdn() + "/";
+}
+
+String wifiStaIpString() {
+  if (WiFi.status() != WL_CONNECTED)
+    return String("");
+  return WiFi.localIP().toString();
 }
