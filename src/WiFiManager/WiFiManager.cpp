@@ -4,7 +4,7 @@
 #include <ESPmDNS.h>
 #include <time.h>
 
-static constexpr const char *AP_SSID = "TV_DEVICE";
+static constexpr const char *AP_SSID = "IOT_DEVICE_";
 static constexpr const char *AP_PASS = "123456788";
 static constexpr const char *STA_HOSTNAME = "neo10";
 static const IPAddress AP_IP(192, 168, 4, 1);
@@ -55,7 +55,7 @@ static void startMdnsIfReady() {
 static void configureSoftAp() {
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   String mac = WiFi.softAPmacAddress();
-  String fullSsid = String(AP_SSID) + " " + mac.substring(9);
+  String fullSsid = String(AP_SSID) + mac.substring(9);
   if (WiFi.softAP(fullSsid.c_str(), AP_PASS, 6, 0))
     Serial.printf("[WIFI] AP OK  SSID=%s  IP=%s\n", fullSsid.c_str(),
                   WiFi.softAPIP().toString().c_str());
