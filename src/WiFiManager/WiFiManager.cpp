@@ -54,8 +54,10 @@ static void startMdnsIfReady() {
 
 static void configureSoftAp() {
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
-  if (WiFi.softAP(AP_SSID, AP_PASS, 6, 0))
-    Serial.printf("[WIFI] AP OK  SSID=%s  IP=%s\n", AP_SSID,
+  String mac = WiFi.softAPmacAddress();
+  String fullSsid = String(AP_SSID) + " " + mac.substring(9);
+  if (WiFi.softAP(fullSsid.c_str(), AP_PASS, 6, 0))
+    Serial.printf("[WIFI] AP OK  SSID=%s  IP=%s\n", fullSsid.c_str(),
                   WiFi.softAPIP().toString().c_str());
   else
     Serial.println("[WIFI] AP FAILED");
