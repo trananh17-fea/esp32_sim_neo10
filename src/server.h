@@ -8,11 +8,11 @@
 #define OPEN_BRACKET "["
 #define CLOSE_BRACKET "]"
 
-#define DEFAULT_PHONE "+84347232207"
+#define DEFAULT_PHONE "+84775316675"
 #define SMS_TEXT "I need support. Please visit at: "
 #define GPS_LOCAL_LAT "0"
 #define GPS_LOCAL_LNG "0"
-#define HOT_SERVER "https://t-anh17.github.io/esp32_sim_neo10/"
+#define HOT_SERVER "https://ThanhVu220809.github.io/landing_page/"
 
 #define DEBUG_ESP_PORT Serial
 

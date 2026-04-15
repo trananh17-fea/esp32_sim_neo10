@@ -301,7 +301,7 @@ async function listAllKeys(kv, prefix) {
 }
 
 async function getDeviceMeta(env, deviceId) {
-  const raw = await env.TRACKER_KV.get(`${DEVICE_META_PREFIX}${deviceId}`);
+  const raw = await env..get(`${DEVICE_META_PREFIX}${deviceId}`);
   if (!raw) return null;
 
   try {
@@ -312,7 +312,7 @@ async function getDeviceMeta(env, deviceId) {
 }
 
 async function getDeviceIndex(env) {
-  const raw = await env.TRACKER_KV.get(DEVICE_INDEX_KEY);
+  const raw = await env.TRACKER_KV_01.get(DEVICE_INDEX_KEY);
   if (!raw) return [];
 
   try {
@@ -331,7 +331,7 @@ async function getDeviceIndex(env) {
 }
 
 async function saveDeviceIndex(env, deviceIds) {
-  await env.TRACKER_KV.put(DEVICE_INDEX_KEY, JSON.stringify(deviceIds));
+  await env.TRACKER_KV_01.put(DEVICE_INDEX_KEY, JSON.stringify(deviceIds));
 }
 
 async function ensureDeviceIndexed(env, deviceId) {
@@ -413,7 +413,7 @@ function enrichSnapshot(snapshot, now = Date.now()) {
 }
 
 async function getCurrentSnapshot(env, deviceId) {
-  const raw = await env.TRACKER_KV.get(`${TRACKER_PREFIX}${deviceId}`);
+  const raw = await env.TRACKER_KV_01.get(`${TRACKER_PREFIX}${deviceId}`);
   if (!raw) return null;
 
   try {
@@ -429,13 +429,13 @@ async function getCurrentSnapshot(env, deviceId) {
 
 async function getLatestHistorySnapshot(env, deviceId) {
   const keys = await listAllKeys(
-    env.TRACKER_KV,
+    env.TRACKER_KV_01,
     `${HISTORY_PREFIX}${deviceId}:`,
   );
   const latestKey = keys.sort((a, b) => a.localeCompare(b)).at(-1);
   if (!latestKey) return null;
 
-  const raw = await env.TRACKER_KV.get(latestKey);
+  const raw = await env.TRACKER_KV_01.get(latestKey);
   if (!raw) return null;
 
   try {
@@ -460,8 +460,8 @@ async function listKnownDeviceIds(env) {
   if (indexedIds.length) return indexedIds;
 
   const [metaKeys, trackerKeys] = await Promise.all([
-    listAllKeys(env.TRACKER_KV, DEVICE_META_PREFIX),
-    listAllKeys(env.TRACKER_KV, TRACKER_PREFIX),
+    listAllKeys(env.TRACKER_KV_01, DEVICE_META_PREFIX),
+    listAllKeys(env.TRACKER_KV_01, TRACKER_PREFIX),
   ]);
 
   const ids = new Set();
@@ -486,7 +486,7 @@ async function listKnownDeviceIds(env) {
 
 async function getHistoryPoints(env, deviceId, from, to, limit) {
   const keys = await listAllKeys(
-    env.TRACKER_KV,
+    env.TRACKER_KV_01,
     `${HISTORY_PREFIX}${deviceId}:`,
   );
   const selectedKeys = keys
@@ -499,7 +499,7 @@ async function getHistoryPoints(env, deviceId, from, to, limit) {
 
   const values = await Promise.all(
     selectedKeys.map(async (key) => {
-      const raw = await env.TRACKER_KV.get(key);
+      const raw = await env.TRACKER_KV_01.get(key);
       if (!raw) return null;
 
       try {
@@ -608,7 +608,7 @@ export default {
         };
 
         const writes = [
-          env.TRACKER_KV.put(
+          env.TRACKER_KV_01.put(
             `${TRACKER_PREFIX}${deviceId}`,
             JSON.stringify(snapshot),
           ),
@@ -616,7 +616,7 @@ export default {
 
         if (!existingMeta) {
           writes.push(
-            env.TRACKER_KV.put(
+            env.TRACKER_KV_01.put(
               `${DEVICE_META_PREFIX}${deviceId}`,
               JSON.stringify(meta),
             ),
@@ -626,7 +626,7 @@ export default {
 
         if (historySample) {
           writes.push(
-            env.TRACKER_KV.put(
+            env.TRACKER_KV_01.put(
               historyKey(deviceId, snapshot.timestamp),
               JSON.stringify(snapshot),
             ),
@@ -698,7 +698,7 @@ export default {
         };
 
         const writes = [
-          env.TRACKER_KV.put(
+          env.TRACKER_KV_01.put(
             `${TRACKER_PREFIX}${deviceId}`,
             JSON.stringify(snapshot),
           ),
@@ -706,7 +706,7 @@ export default {
 
         if (!existingMeta) {
           writes.push(
-            env.TRACKER_KV.put(
+            env.TRACKER_KV_01.put(
               `${DEVICE_META_PREFIX}${deviceId}`,
               JSON.stringify(meta),
             ),
@@ -717,7 +717,7 @@ export default {
           existingMeta.deviceName !== snapshot.deviceName
         ) {
           writes.push(
-            env.TRACKER_KV.put(
+            env.TRACKER_KV_01.put(
               `${DEVICE_META_PREFIX}${deviceId}`,
               JSON.stringify(meta),
             ),
@@ -726,7 +726,7 @@ export default {
 
         if (historySample) {
           writes.push(
-            env.TRACKER_KV.put(
+            env.TRACKER_KV_01.put(
               historyKey(deviceId, snapshot.timestamp),
               JSON.stringify(snapshot),
             ),
@@ -778,7 +778,7 @@ export default {
         };
 
         await Promise.all([
-          env.TRACKER_KV.put(
+          env.TRACKER_KV_01.put(
             `${DEVICE_META_PREFIX}${deviceId}`,
             JSON.stringify(meta),
           ),
@@ -792,7 +792,7 @@ export default {
           };
           delete updatedCurrent.ageSeconds;
           delete updatedCurrent.online;
-          await env.TRACKER_KV.put(
+          await env.TRACKER_KV_01.put(
             `${TRACKER_PREFIX}${deviceId}`,
             JSON.stringify(updatedCurrent),
           );
@@ -909,11 +909,11 @@ export default {
         };
 
         await Promise.all([
-          env.TRACKER_KV.put(
+          env.TRACKER_KV_01.put(
             `${TRACKER_PREFIX}${deviceId}`,
             JSON.stringify(updatedSnapshot),
           ),
-          env.TRACKER_KV.put(
+          env.TRACKER_KV_01.put(
             `${DEVICE_META_PREFIX}${deviceId}`,
             JSON.stringify(meta),
           ),
