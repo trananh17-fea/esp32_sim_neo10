@@ -176,7 +176,7 @@ export const translations = {
     },
     footer: {
       copy: "© 2026 BA.SEW. All rights reserved.",
-      dev: "Dev by Thanh Vũ",
+      dev: "Dev by Thanh Vũ & TA SOLUTIONS",
     },
   },
   en: {
@@ -356,7 +356,7 @@ export const translations = {
     },
     footer: {
       copy: "© 2026 BA.SEW. All rights reserved.",
-      dev: "Dev by Thanh Vũ",
+      dev: "Dev by Thanh Vũ & TA SOLUTIONS",
     },
   },
 } as const;
