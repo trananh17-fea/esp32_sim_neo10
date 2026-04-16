@@ -1,8 +1,10 @@
 import { useState, type FC } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, ShoppingBag, X } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { useScrolled } from "@/hooks/useScrolled";
+import { useCart } from "@/hooks/useCart";
 import BrandLogo from "@/components/BrandLogo";
+import CartDropdown from "@/components/CartDropdown";
 import { trackCTA, trackNavbarClick } from "@/services/analytics/webAnalytics";
 
 interface NavItem {
@@ -17,10 +19,17 @@ const navItems: NavItem[] = [
   { id: "contact", key: "contact" },
 ];
 
-const Navbar: FC = () => {
+interface NavbarProps {
+  onHelpClick?: () => void;
+  onOrderClick?: () => void;
+  onCheckout?: () => void;
+}
+
+const Navbar: FC<NavbarProps> = ({ onHelpClick, onOrderClick, onCheckout }) => {
   const { t } = useI18n();
   const scrolled = useScrolled(16);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const { totalItems, toggleCart } = useCart();
 
   return (
     <nav
@@ -45,16 +54,38 @@ const Navbar: FC = () => {
               {t.nav[item.key]}
             </a>
           ))}
+          <button
+            type="button"
+            onClick={onHelpClick}
+            className="text-xs font-normal text-[#1d1d1f]/80 transition-colors hover:text-[#1d1d1f]"
+          >
+            Trợ giúp
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <a
-            href="#order"
-            onClick={() => trackCTA("order_nav", "navbar")}
+          {/* Cart icon */}
+          <button
+            type="button"
+            onClick={toggleCart}
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-[#1d1d1f] transition-colors hover:bg-black/5"
+            aria-label="Giỏ hàng"
+          >
+            <ShoppingBag className="h-[18px] w-[18px]" />
+            {totalItems > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#0071e3] px-1 text-[10px] font-bold text-white">
+                {totalItems}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { onOrderClick?.(); trackCTA("order_nav", "navbar"); }}
             className="hidden h-[30px] items-center rounded-full bg-[#0071e3] px-4 text-xs font-normal text-white transition-all hover:bg-[#0077ED] md:inline-flex"
           >
             {t.nav.orderCta}
-          </a>
+          </button>
 
           <button
             type="button"
@@ -84,19 +115,28 @@ const Navbar: FC = () => {
                 {t.nav[item.key]}
               </a>
             ))}
-            <a
-              href="#order"
+            <button
+              type="button"
+              onClick={() => { setMobileOpen(false); onHelpClick?.(); }}
+              className="rounded-lg px-3 py-2.5 text-sm font-normal text-[#0071e3] transition-colors hover:bg-[#f5f5f7] text-left"
+            >
+              Trợ giúp
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setMobileOpen(false);
+                onOrderClick?.();
                 trackCTA("order_nav_mobile", "navbar");
               }}
               className="mt-3 inline-flex h-11 items-center justify-center rounded-full bg-[#0071e3] px-5 text-sm font-normal text-white"
             >
               {t.nav.orderCta}
-            </a>
+            </button>
           </div>
         </div>
       )}
+      <CartDropdown onCheckout={onCheckout} />
     </nav>
   );
 };
