@@ -25,52 +25,52 @@ const Navbar: FC = () => {
   return (
     <nav
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${scrolled
-          ? "border-b border-[#E7DED2]/90 bg-[#F7F3EE]/90 backdrop-blur-xl shadow-[0_16px_34px_-24px_rgba(74,52,38,0.52)]"
-          : "bg-[#F7F3EE]/70 backdrop-blur-lg"
+        ? "bg-white/80 backdrop-blur-2xl shadow-[0_1px_0_rgba(0,0,0,0.08)]"
+        : "bg-white/60 backdrop-blur-xl"
         }`}
     >
-      <div className="container flex h-[74px] items-center justify-between gap-3">
+      <div className="container flex h-12 items-center justify-between gap-4">
         <a href="#" className="shrink-0" aria-label="BA.SEW">
           <BrandLogo compact showSubtitle={false} />
         </a>
 
-        <div className="hidden items-center gap-7 lg:flex">
+        <div className="hidden items-center gap-8 lg:flex">
           {navItems.map((item) => (
             <a
               key={item.id}
               href={`#${item.id}`}
               onClick={() => trackNavbarClick(item.id)}
-              className="text-sm font-medium text-[#6E5A4A] transition-colors hover:text-[#2B211B]"
+              className="text-xs font-normal text-[#1d1d1f]/80 transition-colors hover:text-[#1d1d1f]"
             >
               {t.nav[item.key]}
             </a>
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <a
             href="#order"
             onClick={() => trackCTA("order_nav", "navbar")}
-            className="hidden h-11 items-center rounded-xl bg-[#6B4F3A] px-5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#4A3426] md:inline-flex"
+            className="hidden h-[30px] items-center rounded-full bg-[#0071e3] px-4 text-xs font-normal text-white transition-all hover:bg-[#0077ED] md:inline-flex"
           >
             {t.nav.orderCta}
           </a>
 
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E7DED2] bg-white text-[#4A3426] transition-colors hover:bg-[#F7F3EE] lg:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#1d1d1f] transition-colors hover:bg-black/5 lg:hidden"
             onClick={() => setMobileOpen((open) => !open)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileOpen ? <X className="h-[18px] w-[18px]" /> : <Menu className="h-[18px] w-[18px]" />}
           </button>
         </div>
       </div>
 
       {mobileOpen && (
-        <div className="border-t border-[#E7DED2] bg-[#F7F3EE]/95 px-4 pb-4 pt-2 shadow-[0_24px_42px_-30px_rgba(74,52,38,0.65)] lg:hidden">
-          <div className="container flex flex-col gap-1 px-0">
+        <div className="border-t border-[#d2d2d7]/40 bg-white/95 backdrop-blur-2xl px-4 pb-5 pt-3 lg:hidden">
+          <div className="container flex flex-col gap-0.5 px-0">
             {navItems.map((item) => (
               <a
                 key={item.id}
@@ -79,7 +79,7 @@ const Navbar: FC = () => {
                   setMobileOpen(false);
                   trackNavbarClick(item.id);
                 }}
-                className="rounded-xl px-3 py-3 text-sm font-medium text-[#4A3426] transition-colors hover:bg-white"
+                className="rounded-lg px-3 py-2.5 text-sm font-normal text-[#1d1d1f] transition-colors hover:bg-[#f5f5f7]"
               >
                 {t.nav[item.key]}
               </a>
@@ -90,7 +90,7 @@ const Navbar: FC = () => {
                 setMobileOpen(false);
                 trackCTA("order_nav_mobile", "navbar");
               }}
-              className="mt-2 inline-flex h-11 items-center justify-center rounded-xl bg-[#6B4F3A] px-4 text-sm font-semibold text-white"
+              className="mt-3 inline-flex h-11 items-center justify-center rounded-full bg-[#0071e3] px-5 text-sm font-normal text-white"
             >
               {t.nav.orderCta}
             </a>

@@ -10,27 +10,40 @@ const ConversionSection: FC = () => {
   const { t } = useI18n();
 
   return (
-    <section id="pricing-order" className="scroll-mt-24 py-12 sm:py-16">
-      <div className="container">
-        <div className="rounded-[1.8rem] border border-[#E7DED2] bg-gradient-to-b from-white via-white to-[#F8F3ED] p-5 shadow-[0_30px_80px_-55px_rgba(74,52,38,0.75)] sm:p-8">
+    <section id="pricing-order" className="scroll-mt-12">
+      {/* Pricing hero - centered */}
+      <div className="bg-white py-20 text-center sm:py-28">
+        <div className="container">
+          <h2 className="text-section-title text-[#1d1d1f]">{t.pricingOrder.heading}</h2>
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#86868b]">
+            {t.pricingOrder.sub}
+          </p>
+          <div className="mt-8">
+            <span className="text-[clamp(2.5rem,8vw,4rem)] font-bold leading-none tracking-tight text-[#1d1d1f]">
+              {t.pricingOrder.price}
+            </span>
+            <span className="ml-2 text-base font-normal text-[#86868b]">{t.pricingOrder.unit}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Includes + Contact + Order form */}
+      <div className="bg-[#f5f5f7] py-16 sm:py-20">
+        <div className="container">
           <div className="grid items-start gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="space-y-4">
-              <article className="rounded-2xl border border-[#E7DED2] bg-white p-5 sm:p-6">
-                <h2 className="text-2xl font-bold tracking-tight text-[#2B211B] sm:text-3xl">{t.pricingOrder.heading}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-[#6E5A4A]">{t.pricingOrder.sub}</p>
-
-                <div className="mt-5 flex items-end gap-2">
-                  <span className="text-[clamp(2.3rem,8vw,3.6rem)] font-extrabold leading-none tracking-tight text-[#4A3426]">
-                    {t.pricingOrder.price}
-                  </span>
-                  <span className="pb-1 text-sm font-medium text-[#6E5A4A]">{t.pricingOrder.unit}</span>
-                </div>
-
-                <div className="mt-5 space-y-2.5">
+            {/* Left column */}
+            <div className="space-y-5">
+              {/* Includes */}
+              <article className="rounded-3xl bg-white p-6 sm:p-8">
+                <h3 className="text-lg font-semibold text-[#1d1d1f]">Bao gồm</h3>
+                <div className="mt-5 space-y-3">
                   {t.pricingOrder.includes.map((item) => (
-                    <div key={item} className="flex items-start gap-2.5 rounded-xl border border-[#EDE4D9] bg-[#F7F3EE] px-3 py-2.5 text-sm text-[#4A3426]">
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6B4F3A]/10 text-[#6B4F3A]">
-                        <Check className="h-3.5 w-3.5" />
+                    <div
+                      key={item}
+                      className="flex items-start gap-3 text-sm text-[#1d1d1f]"
+                    >
+                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0071e3]/10 text-[#0071e3]">
+                        <Check className="h-3 w-3" strokeWidth={3} />
                       </span>
                       <span>{item}</span>
                     </div>
@@ -38,36 +51,39 @@ const ConversionSection: FC = () => {
                 </div>
               </article>
 
-              <article id="contact" className="rounded-2xl border border-[#E7DED2] bg-white p-5 sm:p-6">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#6B4F3A]">{t.contact.heading}</p>
+              {/* Contact */}
+              <article id="contact" className="rounded-3xl bg-white p-6 sm:p-8">
+                <p className="mb-4 text-xs font-medium uppercase tracking-wider text-[#0071e3]">
+                  {t.contact.heading}
+                </p>
                 <BrandLogo showSubtitle />
 
-                <div className="mt-4 space-y-3 text-sm">
-                  <p className="flex items-center gap-2 text-[#4A3426]">
-                    <User className="h-4 w-4 text-[#6B4F3A]" />
+                <div className="mt-5 space-y-3 text-sm">
+                  <p className="flex items-center gap-3 text-[#1d1d1f]">
+                    <User className="h-4 w-4 text-[#86868b]" />
                     <span>{t.contact.person}</span>
                   </p>
                   <a
                     href={`tel:${t.contact.phone}`}
                     onClick={() => trackContactClick("phone")}
-                    className="flex items-center gap-2 text-[#4A3426] transition-colors hover:text-[#2B211B]"
+                    className="flex items-center gap-3 text-[#1d1d1f] transition-colors hover:text-[#0071e3]"
                   >
-                    <Phone className="h-4 w-4 text-[#6B4F3A]" />
+                    <Phone className="h-4 w-4 text-[#86868b]" />
                     <span>{t.contact.phone}</span>
                   </a>
                   <a
                     href={`mailto:${t.contact.email}`}
                     onClick={() => trackContactClick("email")}
-                    className="flex items-center gap-2 break-all text-[#4A3426] transition-colors hover:text-[#2B211B]"
+                    className="flex items-center gap-3 break-all text-[#1d1d1f] transition-colors hover:text-[#0071e3]"
                   >
-                    <Mail className="h-4 w-4 text-[#6B4F3A]" />
+                    <Mail className="h-4 w-4 text-[#86868b]" />
                     <span>{t.contact.email}</span>
                   </a>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-[#E7DED2] bg-[#F7F3EE] p-4 sm:p-5">
-                  <p className="text-center text-sm font-medium text-[#4A3426]">{t.contact.zaloNote}</p>
-                  <div className="mx-auto mt-3 w-[200px] rounded-2xl border border-[#E7DED2] bg-white p-3 shadow-sm sm:w-[230px]">
+                <div className="mt-6 rounded-2xl bg-[#f5f5f7] p-5">
+                  <p className="text-center text-sm font-medium text-[#1d1d1f]">{t.contact.zaloNote}</p>
+                  <div className="mx-auto mt-3 w-[200px] overflow-hidden rounded-2xl bg-white p-3 sm:w-[230px]">
                     <img
                       src={zaloQr}
                       alt="QR Zalo BA.SEW"
@@ -79,13 +95,14 @@ const ConversionSection: FC = () => {
                 <a
                   href={`tel:${t.contact.phone}`}
                   onClick={() => trackCTA("call_contact", "conversion_section")}
-                  className="mt-5 inline-flex h-11 items-center rounded-xl bg-[#6B4F3A] px-5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#4A3426]"
+                  className="mt-6 inline-flex h-11 items-center rounded-full bg-[#1d1d1f] px-6 text-sm font-normal text-white transition-all hover:bg-[#000]"
                 >
                   {t.contact.callCta}
                 </a>
               </article>
             </div>
 
+            {/* Right column - Order form */}
             <div id="order">
               <OrderForm />
             </div>

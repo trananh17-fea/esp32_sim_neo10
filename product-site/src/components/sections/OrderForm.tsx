@@ -36,7 +36,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 const fieldClassName: string =
-  "h-11 w-full rounded-xl border border-[#D8CCBD] bg-[#FFFDFC] px-3 text-sm text-[#2B211B] outline-none transition-all placeholder:text-[#9D8A7A] focus:border-[#6B4F3A] focus:ring-2 focus:ring-[#6B4F3A]/20";
+  "h-12 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-[15px] text-[#1d1d1f] outline-none transition-all placeholder:text-[#86868b] focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20";
 
 const OrderForm: FC<OrderFormProps> = ({ className }) => {
   const { t } = useI18n();
@@ -101,21 +101,21 @@ const OrderForm: FC<OrderFormProps> = ({ className }) => {
   const nameField = register("name");
 
   return (
-    <div className={cn("rounded-2xl border border-[#E7DED2] bg-white p-5 sm:p-6", className)}>
-      <h3 className="text-xl font-bold tracking-tight text-[#2B211B]">{t.order.heading}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-[#6E5A4A]">{t.order.sub}</p>
+    <div className={cn("rounded-3xl bg-white p-6 sm:p-8", className)}>
+      <h3 className="text-xl font-semibold tracking-tight text-[#1d1d1f]">{t.order.heading}</h3>
+      <p className="mt-1.5 text-sm leading-relaxed text-[#86868b]">{t.order.sub}</p>
 
       {status === "success" ? (
-        <div className="py-10 text-center">
-          <div className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#6B4F3A]/10 text-[#6B4F3A]">
-            <ShieldCheck className="h-7 w-7" />
+        <div className="py-12 text-center">
+          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#e8f5e9] text-[#34c759]">
+            <ShieldCheck className="h-8 w-8" />
           </div>
-          <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-[#2B211B]">{t.order.success}</p>
+          <p className="mx-auto max-w-md text-sm font-medium leading-relaxed text-[#1d1d1f]">{t.order.success}</p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} onFocus={markFormStarted} className="mt-5 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} onFocus={markFormStarted} className="mt-6 space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#4A3426]">{t.order.name} *</label>
+            <label className="mb-1.5 block text-sm font-medium text-[#1d1d1f]">{t.order.name} *</label>
             <input
               {...nameField}
               ref={(el) => {
@@ -127,12 +127,12 @@ const OrderForm: FC<OrderFormProps> = ({ className }) => {
               aria-invalid={Boolean(errors.name)}
               className={fieldClassName}
             />
-            {errors.name && <p className="mt-1 text-xs text-[#AF3E32]">{errors.name.message}</p>}
+            {errors.name && <p className="mt-1 text-xs text-[#ff3b30]">{errors.name.message}</p>}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#4A3426]">{t.order.phone} *</label>
+              <label className="mb-1.5 block text-sm font-medium text-[#1d1d1f]">{t.order.phone} *</label>
               <input
                 {...register("phone")}
                 placeholder={t.order.placeholders.phone}
@@ -141,11 +141,11 @@ const OrderForm: FC<OrderFormProps> = ({ className }) => {
                 aria-invalid={Boolean(errors.phone)}
                 className={fieldClassName}
               />
-              {errors.phone && <p className="mt-1 text-xs text-[#AF3E32]">{errors.phone.message}</p>}
+              {errors.phone && <p className="mt-1 text-xs text-[#ff3b30]">{errors.phone.message}</p>}
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#4A3426]">{t.order.quantity} *</label>
+              <label className="mb-1.5 block text-sm font-medium text-[#1d1d1f]">{t.order.quantity} *</label>
               <input
                 {...register("quantity")}
                 type="number"
@@ -155,12 +155,12 @@ const OrderForm: FC<OrderFormProps> = ({ className }) => {
                 aria-invalid={Boolean(errors.quantity)}
                 className={fieldClassName}
               />
-              {errors.quantity && <p className="mt-1 text-xs text-[#AF3E32]">{errors.quantity.message}</p>}
+              {errors.quantity && <p className="mt-1 text-xs text-[#ff3b30]">{errors.quantity.message}</p>}
             </div>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#4A3426]">{t.order.email}</label>
+            <label className="mb-1.5 block text-sm font-medium text-[#1d1d1f]">{t.order.email}</label>
             <input
               {...register("email")}
               type="email"
@@ -169,11 +169,11 @@ const OrderForm: FC<OrderFormProps> = ({ className }) => {
               aria-invalid={Boolean(errors.email)}
               className={fieldClassName}
             />
-            {errors.email && <p className="mt-1 text-xs text-[#AF3E32]">{errors.email.message}</p>}
+            {errors.email && <p className="mt-1 text-xs text-[#ff3b30]">{errors.email.message}</p>}
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#4A3426]">{t.order.interest} *</label>
+            <label className="mb-1.5 block text-sm font-medium text-[#1d1d1f]">{t.order.interest} *</label>
             <select {...register("interest")} aria-invalid={Boolean(errors.interest)} className={fieldClassName}>
               <option value="">{t.order.placeholders.interest}</option>
               {interests.map((option) => (
@@ -182,36 +182,36 @@ const OrderForm: FC<OrderFormProps> = ({ className }) => {
                 </option>
               ))}
             </select>
-            {errors.interest && <p className="mt-1 text-xs text-[#AF3E32]">{errors.interest.message}</p>}
+            {errors.interest && <p className="mt-1 text-xs text-[#ff3b30]">{errors.interest.message}</p>}
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#4A3426]">{t.order.message}</label>
+            <label className="mb-1.5 block text-sm font-medium text-[#1d1d1f]">{t.order.message}</label>
             <textarea
               {...register("message")}
               rows={4}
               placeholder={t.order.placeholders.message}
-              className="w-full rounded-xl border border-[#D8CCBD] bg-[#FFFDFC] px-3 py-2.5 text-sm text-[#2B211B] outline-none transition-all placeholder:text-[#9D8A7A] focus:border-[#6B4F3A] focus:ring-2 focus:ring-[#6B4F3A]/20"
+              className="w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-[15px] text-[#1d1d1f] outline-none transition-all placeholder:text-[#86868b] focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20"
             />
           </div>
 
           <button
             type="submit"
             disabled={status === "sending"}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#6B4F3A] text-sm font-semibold text-white transition-colors hover:bg-[#4A3426] disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#0071e3] text-[15px] font-normal text-white transition-colors hover:bg-[#0077ED] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status === "sending" && <Loader2 className="h-4 w-4 animate-spin" />}
             {status === "sending" ? t.order.sending : t.order.submit}
           </button>
 
           {status === "error" && (
-            <div className="flex items-center gap-2 rounded-xl border border-[#F5C2BD] bg-[#FFF4F3] px-3 py-2 text-sm text-[#AF3E32]">
+            <div className="flex items-center gap-2 rounded-xl bg-[#fff5f5] px-4 py-3 text-sm text-[#ff3b30]">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <p>{t.order.error}</p>
             </div>
           )}
 
-          <p className="text-center text-xs text-[#7C6958]">{t.order.privacy}</p>
+          <p className="text-center text-xs text-[#86868b]">{t.order.privacy}</p>
         </form>
       )}
     </div>

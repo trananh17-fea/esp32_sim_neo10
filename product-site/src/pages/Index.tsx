@@ -10,7 +10,7 @@ import {
 
 const Index: FC = () => {
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-white">
       <Navbar />
       <HeroSection />
       <OverviewSection />

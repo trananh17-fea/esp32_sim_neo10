@@ -1,9 +1,13 @@
 ﻿import type { FC } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, BellRing, CircleCheck, MapPinned, PhoneCall, ShieldCheck } from "lucide-react";
+import { ArrowRight, BellRing, MapPinned, PhoneCall, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { trackCTA } from "@/services/analytics/webAnalytics";
-import productMain from "@/assets/product-02-2.jpg";
+import productMain from "@/assets/img_main.png";
+import productImg2 from "@/assets/img2.jpg";
+import productImg3 from "@/assets/img3.jpg";
+import productImg5 from "@/assets/img5.jpg";
+import productImg6 from "@/assets/img6.jpg";
 
 interface FeatureBadge {
   icon: LucideIcon;
@@ -21,76 +25,87 @@ const HeroSection: FC = () => {
   const { t } = useI18n();
 
   return (
-    <section className="pb-12 pt-24 sm:pb-16 sm:pt-28">
-      <div className="container">
-        <div className="rounded-[1.8rem] border border-[#E7DED2] bg-white/95 p-5 shadow-[0_30px_80px_-48px_rgba(74,52,38,0.6)] sm:p-8 lg:p-10">
-          <div className="grid items-center gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:gap-10">
-            <div className="max-w-xl">
-              <span className="inline-flex rounded-full border border-[#E7DED2] bg-[#F7F3EE] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#6B4F3A]">
-                Thiết bị cảnh báo khẩn cấp thông minh
-              </span>
-              <h1 className="mt-4 text-[clamp(1.95rem,5.4vw,3.3rem)] font-extrabold leading-[1.08] tracking-tight text-[#2B211B]">
-                <span className="block font-display text-[#4A3426]">BA.SEW</span>
-                <span className="mt-2 block whitespace-pre-line">{t.hero.headline}</span>
-              </h1>
-              <p className="mt-4 text-sm leading-relaxed text-[#6E5A4A] sm:text-base">{t.hero.sub}</p>
+    <section className="overflow-hidden bg-white pb-0 pt-14">
+      {/* Hero text - centered Apple style */}
+      <div className="container py-16 text-center sm:py-24">
+        <p className="text-sm font-medium tracking-wide text-[#0071e3] sm:text-base">
+          Thiết bị cảnh báo khẩn cấp thông minh
+        </p>
+        <h1 className="mx-auto mt-3 max-w-3xl text-hero-xl text-[#1d1d1f]">
+          <span className="block">BE.SEW</span>
+          <span className="mt-1 block text-[clamp(1.3rem,3.2vw,1.8rem)] font-medium leading-snug text-[#86868b]">
+            {t.hero.headline}
+          </span>
+        </h1>
 
-              <div className="mt-5 grid grid-cols-2 gap-2.5 sm:max-w-lg">
-                {t.hero.bullets.map((item) => (
-                  <div
-                    key={item}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#E7DED2] bg-[#F7F3EE] px-3 py-2 text-[13px] font-medium leading-snug text-[#4A3426]"
-                  >
-                    <CircleCheck className="h-4 w-4 shrink-0 text-[#6B4F3A]" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <a
+            href="#demo"
+            onClick={() => trackCTA("hero_demo", "hero")}
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#0071e3] px-6 text-[15px] font-normal text-white transition-all hover:bg-[#0077ED]"
+          >
+            {t.hero.ctaDemo}
+            <ArrowRight className="h-4 w-4" />
+          </a>
+          <a
+            href="#contact"
+            onClick={() => trackCTA("hero_contact", "hero")}
+            className="inline-flex h-11 items-center rounded-full border border-[#0071e3] px-6 text-[15px] font-normal text-[#0071e3] transition-colors hover:bg-[#0071e3] hover:text-white"
+          >
+            {t.hero.ctaOrder}
+          </a>
+        </div>
+      </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <a
-                  href="#demo"
-                  onClick={() => trackCTA("hero_demo", "hero")}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#6B4F3A] px-5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#4A3426]"
-                >
-                  {t.hero.ctaDemo}
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-                <a
-                  href="#contact"
-                  onClick={() => trackCTA("hero_contact", "hero")}
-                  className="inline-flex h-11 items-center rounded-xl border border-[#D8CCBD] bg-white px-5 text-sm font-semibold text-[#4A3426] transition-colors hover:bg-[#F7F3EE]"
-                >
-                  {t.hero.ctaOrder}
-                </a>
-              </div>
-            </div>
+      {/* Product image - full width Apple style */}
+      <div className="relative mx-auto max-w-5xl px-4">
+        <div className="relative overflow-hidden rounded-t-3xl bg-[#f5f5f7]">
+          <img
+            src={productMain}
+            alt="Thiết bị BA.SEW"
+            className="mx-auto h-[320px] w-full object-cover sm:h-[440px] lg:h-[520px]"
+          />
+        </div>
+      </div>
 
-            <div className="w-full">
-              <div className="relative overflow-hidden rounded-[1.6rem] border border-[#E7DED2] bg-gradient-to-br from-[#FAF7F3] via-white to-[#F2E8DC] p-4 shadow-[0_26px_65px_-42px_rgba(74,52,38,0.75)] sm:p-5">
+      {/* Product gallery - Apple grid style */}
+      <div className="bg-[#f5f5f7] pb-4 pt-3">
+        <div className="mx-auto max-w-5xl px-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { src: productImg2, label: "Góc nhìn 2" },
+              { src: productImg3, label: "Góc nhìn 3" },
+              { src: productImg5, label: "Góc nhìn 4" },
+              { src: productImg6, label: "Góc nhìn 5" },
+            ].map(({ src, label }, i) => (
+              <div key={i} className="overflow-hidden rounded-2xl bg-white">
                 <img
-                  src={productMain}
-                  alt="Thiết bị BA.SEW"
-                  className="h-[280px] w-full rounded-2xl border border-[#E7DED2] object-cover shadow-[0_24px_55px_-36px_rgba(74,52,38,0.8)] sm:h-[350px] lg:h-[390px]"
+                  src={src}
+                  alt={`Sản phẩm BA.SEW – ${label}`}
+                  loading="lazy"
+                  className="h-32 w-full object-cover sm:h-40 lg:h-48"
                 />
-
-                <div className="mt-3 grid grid-cols-2 gap-2.5">
-                  {featureBadges.map(({ icon: Icon, label }) => (
-                    <div
-                      key={label}
-                      className="flex min-h-10 items-center gap-2 rounded-xl border border-[#E7DED2] bg-white px-3 py-2 text-[12px] font-medium leading-snug text-[#4A3426]"
-                    >
-                      <Icon className="h-4 w-4 shrink-0 text-[#6B4F3A]" />
-                      <span>{label}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pointer-events-none absolute right-4 top-4 rounded-xl bg-[#4A3426]/90 px-3 py-2 text-xs font-semibold text-white shadow-lg">
-                  BA.SEW
-                </div>
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Feature badges - minimal Apple style */}
+      <div className="bg-[#f5f5f7] py-8">
+        <div className="container">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            {featureBadges.map(({ icon: Icon, label }) => (
+              <div
+                key={label}
+                className="flex flex-col items-center gap-2.5 rounded-2xl bg-white p-5 text-center"
+              >
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f5f5f7] text-[#1d1d1f]">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-medium text-[#1d1d1f]">{label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

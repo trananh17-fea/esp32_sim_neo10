@@ -7,12 +7,12 @@ module.exports = {
     container: {
       center: true,
       padding: "1rem",
-      screens: { "2xl": "1280px" },
+      screens: { "2xl": "1120px" },
     },
     extend: {
       fontFamily: {
-        sans: ["Manrope", "Segoe UI", "sans-serif"],
-        display: ["Sora", "Manrope", "Segoe UI", "sans-serif"],
+        sans: ["Inter", "SF Pro Display", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        display: ["Inter", "SF Pro Display", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -53,11 +53,26 @@ module.exports = {
           foreground: "hsl(var(--sidebar-foreground))",
           border: "hsl(var(--sidebar-border))",
         },
+        apple: {
+          blue: "#0071e3",
+          "blue-hover": "#0077ED",
+          black: "#1d1d1f",
+          gray: "#86868b",
+          "gray-light": "#f5f5f7",
+          "gray-border": "#d2d2d7",
+          link: "#06c",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        apple: "980px",
+      },
+      fontSize: {
+        "hero-xl": ["clamp(2.5rem, 6vw, 4rem)", { lineHeight: "1.05", letterSpacing: "-0.025em", fontWeight: "700" }],
+        "section-title": ["clamp(1.8rem, 4vw, 3rem)", { lineHeight: "1.08", letterSpacing: "-0.02em", fontWeight: "700" }],
+        "card-title": ["1.25rem", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "600" }],
       },
       keyframes: {
         "accordion-down": {
@@ -69,14 +84,19 @@ module.exports = {
           to: { height: "0" },
         },
         "fade-in": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "0%": { opacity: "0", transform: "translateY(16px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-in-scale": {
+          "0%": { opacity: "0", transform: "scale(0.96)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.4s ease-out",
+        "fade-in": "fade-in 0.6s ease-out",
+        "fade-in-scale": "fade-in-scale 0.5s ease-out",
       },
     },
   },

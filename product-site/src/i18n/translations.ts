@@ -1,7 +1,7 @@
 export const translations = {
   vi: {
     brand: "BA.SEW",
-    brandFull: "BINH AN SMART EMERGENCY WARNING",
+    brandFull: "BE SMART EMERGENCY WARNING",
     tagline: "Thiết bị cảnh báo khẩn cấp thông minh",
     nav: {
       device: "Thiết bị",
@@ -181,7 +181,7 @@ export const translations = {
   },
   en: {
     brand: "BA.SEW",
-    brandFull: "BINH AN SMART EMERGENCY WARNING",
+    brandFull: "BE SMART EMERGENCY WARNING",
     tagline: "Smart emergency warning device",
     nav: {
       device: "Device",
@@ -249,7 +249,7 @@ export const translations = {
     },
     demo: {
       heading: "Guide video + Web tracking demo",
-      desc: "See real usage and how family members can track the device location in browser.",
+      desc: "See how BA.SEW works in real life and how family members can track the device location in browser.",
       videoTitle: "See BA.SEW in real-life use",
       videoDesc: "Ready for YouTube embed, video file, or Facebook video.",
       videoPlaceholderTitle: "Ready for guide video",
