@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 33% 95%;
+    --foreground: 24 23% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 23% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 23% 14%;
+    --primary: 27 30% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 30% 92%;
+    --secondary-foreground: 24 23% 14%;
+    --muted: 31 28% 92%;
+    --muted-foreground: 28 20% 36%;
+    --accent: 26 32% 22%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 6 66% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 34 27% 86%;
+    --input: 34 27% 86%;
+    --ring: 27 30% 33%;
+    --radius: 0.875rem;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 24 23% 14%;
+    --sidebar-border: 34 27% 86%;
+  }
+
+  .dark {
+    --background: 30 33% 95%;
+    --foreground: 24 23% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 24 23% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 23% 14%;
+    --primary: 27 30% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 30% 92%;
+    --secondary-foreground: 24 23% 14%;
+    --muted: 31 28% 92%;
+    --muted-foreground: 28 20% 36%;
+    --accent: 26 32% 22%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 6 66% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 34 27% 86%;
+    --input: 34 27% 86%;
+    --ring: 27 30% 33%;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 24 23% 14%;
+    --sidebar-border: 34 27% 86%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Manrope", "Segoe UI", sans-serif;
+    background-image:
+      radial-gradient(circle at 90% -10%, rgba(107, 79, 58, 0.19), transparent 36%),
+      radial-gradient(circle at -4% 12%, rgba(156, 123, 93, 0.18), transparent 34%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(247, 243, 238, 0.75) 55%, rgba(247, 243, 238, 1) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: rgba(107, 79, 58, 0.22);
+    color: #2b211b;
+  }
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  font-family: "Manrope", "Segoe UI", sans-serif !important;
+  z-index: 0;
+}
+
+.leaflet-control-zoom a {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
