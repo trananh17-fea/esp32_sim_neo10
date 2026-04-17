@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import type { LucideIcon } from "lucide-react";
+import { useInView } from "@/hooks/useInView";
 import {
   CheckCircle2,
   MapPinCheck,
@@ -34,19 +35,26 @@ const featureIcons: LucideIcon[] = [Siren, Smartphone, Radio, CheckCircle2];
 
 const OverviewSection: FC = () => {
   const { t } = useI18n();
+  const [headRef, headVisible] = useInView<HTMLDivElement>();
+  const [uspRef, uspVisible] = useInView<HTMLDivElement>();
+  const [stepsRef, stepsVisible] = useInView<HTMLDivElement>();
+  const [processRef, processVisible] = useInView<HTMLDivElement>();
 
   return (
     <section id="device" className="scroll-mt-12">
-      {/* Main heading - centered Apple style */}
+      {/* Main heading */}
       <div className="bg-white py-20 text-center sm:py-28">
-        <div className="container">
-          <p className="text-sm font-medium tracking-wide text-[#0071e3]">
+        <div
+          ref={headRef}
+          className={`container reveal${headVisible ? " is-visible" : ""}`}
+        >
+          <p className="text-sm font-semibold uppercase tracking-widest text-[#e8340a]">
             {t.overview.processHeading}
           </p>
           <h2 className="mx-auto mt-3 max-w-2xl text-section-title text-[#1d1d1f]">
             {t.overview.heading}
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#86868b]">
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#4a4a4f]">
             {t.overview.desc}
           </p>
         </div>
@@ -60,18 +68,22 @@ const OverviewSection: FC = () => {
           <h3 className="mb-8 text-center text-xl font-semibold text-[#1d1d1f] sm:text-2xl">
             {t.overview.uspHeading}
           </h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            ref={uspRef}
+            className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-4 reveal-group${uspVisible ? " is-visible" : ""
+              }`}
+          >
             {t.overview.usps.map((item, index) => {
               const Icon = uspIcons[index] ?? CheckCircle2;
               return (
                 <div
                   key={item}
-                  className="rounded-2xl bg-white p-6 text-center transition-shadow hover:shadow-lg"
+                  className="rounded-2xl bg-white p-6 text-center transition-all hover:shadow-lg hover:-translate-y-1"
                 >
-                  <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#f5f5f7] text-[#1d1d1f]">
+                  <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#fff1ee] text-[#e8340a]">
                     <Icon className="h-5 w-5" />
                   </span>
-                  <p className="text-sm font-medium leading-snug text-[#1d1d1f]">{item}</p>
+                  <p className="text-sm font-semibold leading-snug text-[#1d1d1f]">{item}</p>
                 </div>
               );
             })}
@@ -84,21 +96,29 @@ const OverviewSection: FC = () => {
           <h3 className="mb-8 text-center text-xl font-semibold text-[#1d1d1f] sm:text-2xl">
             {t.overview.howHeading}
           </h3>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div
+            ref={stepsRef}
+            className={`grid gap-4 sm:grid-cols-3 reveal-group${stepsVisible ? " is-visible" : ""
+              }`}
+          >
             {t.overview.steps.map((step, index) => {
               const Icon = featureIcons[index] ?? CheckCircle2;
               return (
-                <div key={step.title} className="flex flex-col items-center gap-3 rounded-2xl bg-white p-6 text-center">
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#1d1d1f] text-white">
+                <div key={step.title} className="relative flex flex-col items-center gap-3 rounded-2xl bg-white p-6 text-center overflow-hidden">
+                  {/* Step number watermark */}
+                  <span className="absolute right-3 top-2 text-5xl font-black text-[#f5f5f7] select-none">
+                    {index + 1}
+                  </span>
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#e8340a] text-white">
                     <Icon className="h-5 w-5" />
                   </span>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[#0071e3]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#e8340a]">
                     Bước {index + 1}
                   </span>
                   <h4 className="text-sm font-semibold text-[#1d1d1f]">
                     {step.title.replace(/^\d+\.\s*/, "")}
                   </h4>
-                  <p className="text-xs leading-relaxed text-[#86868b]">
+                  <p className="text-xs leading-relaxed text-[#4a4a4f]">
                     {step.desc}
                   </p>
                 </div>
@@ -111,11 +131,14 @@ const OverviewSection: FC = () => {
 
       {/* Process images - Gray section */}
       <div className="bg-[#f5f5f7] py-16 sm:py-20">
-        <div className="container">
-          <p className="mb-2 text-center text-sm font-medium tracking-wide text-[#0071e3]">
+        <div
+          ref={processRef}
+          className={`container reveal${processVisible ? " is-visible" : ""}`}
+        >
+          <p className="mb-2 text-center text-sm font-semibold uppercase tracking-widest text-[#e8340a]">
             {t.overview.processHeading}
           </p>
-          <p className="mx-auto mb-10 max-w-xl text-center text-sm leading-relaxed text-[#86868b]">
+          <p className="mx-auto mb-10 max-w-xl text-center text-sm leading-relaxed text-[#4a4a4f]">
             {t.overview.processDesc}
           </p>
           {/* Full process image - tổng hợp 4 quy trình */}

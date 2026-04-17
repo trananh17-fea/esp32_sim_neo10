@@ -10,19 +10,19 @@
     --card-foreground: 0 0% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 11%;
-    --primary: 211 100% 50%;
+    --primary: 12 92% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 11%;
     --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 11%;
+    --muted-foreground: 0 0% 35%;
+    --accent: 12 92% 48%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 211 100% 50%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 12 92% 48%;
     --radius: 0.75rem;
     --sidebar: 0 0% 100%;
     --sidebar-foreground: 0 0% 11%;
@@ -36,19 +36,19 @@
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 7%;
     --popover-foreground: 0 0% 98%;
-    --primary: 211 100% 50%;
+    --primary: 12 92% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 15%;
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 98%;
+    --muted-foreground: 0 0% 72%;
+    --accent: 12 92% 48%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 20%;
     --input: 0 0% 20%;
-    --ring: 211 100% 50%;
+    --ring: 12 92% 48%;
     --sidebar: 0 0% 7%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-border: 0 0% 20%;
@@ -74,18 +74,64 @@
   }
 
   ::selection {
-    background: rgba(0, 113, 227, 0.15);
+    background: rgba(232, 52, 10, 0.15);
     color: #1d1d1f;
   }
 }
 
-/* Apple-style section backgrounds */
+/* Section backgrounds */
 .section-white {
   background-color: #ffffff;
 }
 
 .section-gray {
   background-color: #f5f5f7;
+}
+
+/* ── Scroll-reveal helpers ──────────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1),
+              transform 0.65s cubic-bezier(0.22,1,0.36,1);
+}
+.reveal.reveal-left {
+  transform: translateX(-28px);
+}
+.reveal.reveal-right {
+  transform: translateX(28px);
+}
+.reveal.reveal-scale {
+  transform: scale(0.95);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Staggered children inside a revealed container */
+.reveal-group > * {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.55s cubic-bezier(0.22,1,0.36,1),
+              transform 0.55s cubic-bezier(0.22,1,0.36,1);
+}
+.reveal-group.is-visible > *:nth-child(1) { opacity:1; transform:none; transition-delay:0ms; }
+.reveal-group.is-visible > *:nth-child(2) { opacity:1; transform:none; transition-delay:80ms; }
+.reveal-group.is-visible > *:nth-child(3) { opacity:1; transform:none; transition-delay:160ms; }
+.reveal-group.is-visible > *:nth-child(4) { opacity:1; transform:none; transition-delay:240ms; }
+.reveal-group.is-visible > *:nth-child(5) { opacity:1; transform:none; transition-delay:320ms; }
+.reveal-group.is-visible > *:nth-child(6) { opacity:1; transform:none; transition-delay:400ms; }
+
+/* SOS pulse ring */
+.sos-pulse {
+  box-shadow: 0 0 0 0 rgba(232,52,10,0.4);
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232,52,10,0.4); }
+  60%       { box-shadow: 0 0 0 12px rgba(232,52,10,0); }
 }
 
 /* Cart dropdown animation */

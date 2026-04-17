@@ -54,11 +54,11 @@ const Index: FC = () => {
               </div>
               <div className="rounded-2xl bg-[#f5f5f7] p-4">
                 <p className="text-sm font-semibold text-[#1d1d1f]">📞 Cần hỗ trợ thêm?</p>
-                <p className="mt-1 text-xs leading-relaxed text-[#86868b]">Liên hệ trực tiếp qua số <span className="font-semibold text-[#0071e3]">0775316675</span> hoặc Zalo cùng số này.</p>
+                <p className="mt-1 text-xs leading-relaxed text-[#86868b]">Liên hệ trực tiếp qua số <span className="font-semibold text-[#e8340a]">0775316675</span> hoặc Zalo cùng số này.</p>
               </div>
             </div>
             <a href="tel:0775316675"
-              className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-full bg-[#0071e3] text-sm font-medium text-white hover:bg-[#0077ED]">
+              className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-full bg-[#e8340a] text-sm font-medium text-white hover:bg-[#c92d08]">
               Gọi ngay hỗ trợ
             </a>
           </div>

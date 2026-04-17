@@ -44,7 +44,7 @@ const CartDropdown: FC<CartDropdownProps> = ({ onCheckout }) => {
                 <a
                   href="#pricing-order"
                   onClick={closeCart}
-                  className="mt-4 inline-flex h-9 items-center rounded-full bg-[#0071e3] px-5 text-xs font-medium text-white hover:bg-[#0077ED]"
+                  className="mt-4 inline-flex h-9 items-center rounded-full bg-[#e8340a] px-5 text-xs font-medium text-white hover:bg-[#c92d08]"
                 >
                   Đặt hàng ngay
                 </a>
@@ -63,7 +63,7 @@ const CartDropdown: FC<CartDropdownProps> = ({ onCheckout }) => {
                           <div className="mt-1 flex items-center gap-1.5">
                             <span
                               className="inline-block h-3 w-3 rounded-full border border-[#d2d2d7]"
-                              style={{ backgroundColor: item.color === "Trắng" ? "#f0f0f0" : item.color === "Đen" ? "#1d1d1f" : "#0071e3" }}
+                              style={{ backgroundColor: item.color === "Trắng" ? "#f0f0f0" : item.color === "Đen" ? "#1d1d1f" : "#e8340a" }}
                             />
                             <span className="text-xs text-[#86868b]">{item.color}</span>
                           </div>
@@ -102,7 +102,7 @@ const CartDropdown: FC<CartDropdownProps> = ({ onCheckout }) => {
                 <span className="text-base font-bold text-[#1d1d1f]">{formatPrice(totalPrice)}</span>
               </div>
               <button type="button" onClick={() => { closeCart(); onCheckout?.(); }}
-                className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#0071e3] text-sm font-medium text-white transition-all hover:bg-[#0077ED]">
+                className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#e8340a] text-sm font-medium text-white transition-all hover:bg-[#c92d08]">
                 Thanh toán ({totalItems} sản phẩm)
               </button>
             </div>
