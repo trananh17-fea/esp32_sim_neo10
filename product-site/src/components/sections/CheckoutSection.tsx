@@ -91,7 +91,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
       <div className="sticky top-0 z-10 border-b border-[#d2d2d7]/40 bg-white/80 backdrop-blur-2xl">
         <div className="container flex h-12 items-center justify-between">
           <button type="button" onClick={handleBackToShop}
-            className="inline-flex items-center gap-1.5 text-sm text-[#e8340a] hover:underline">
+            className="inline-flex items-center gap-1.5 text-sm text-[#8B5E3C] hover:underline">
             <ArrowLeft className="h-4 w-4" />
             Tiếp tục mua hàng
           </button>
@@ -118,7 +118,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               Mã đơn hàng: <span className="font-bold text-[#1d1d1f]">BASEW-{Date.now().toString(36).toUpperCase()}</span>
             </p>
             <button type="button" onClick={handleBackToShop}
-              className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#e8340a] px-6 text-sm font-medium text-white hover:bg-[#c92d08]">
+              className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-6 text-sm font-medium text-white hover:bg-[#6F4A2F]">
               Về trang chủ
             </button>
           </div>
@@ -129,7 +129,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
             <h2 className="text-xl font-semibold text-[#1d1d1f]">Giỏ hàng trống</h2>
             <p className="mt-2 text-sm text-[#6e6e73]">Hãy thêm sản phẩm BA.SEW vào giỏ hàng.</p>
             <button type="button" onClick={handleBackToShop}
-              className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#e8340a] px-6 text-sm font-medium text-white hover:bg-[#c92d08]">
+              className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-6 text-sm font-medium text-white hover:bg-[#6F4A2F]">
               <ArrowLeft className="h-4 w-4" />
               Quay lại mua hàng
             </button>
@@ -145,8 +145,8 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               { icon: Check, label: "Xác nhận", active: false },
             ].map(({ icon: Icon, label, active }, i) => (
               <div key={label} className="flex items-center gap-2">
-                {i > 0 && <div className={`h-px w-8 ${active ? "bg-[#e8340a]" : "bg-[#d2d2d7]"}`} />}
-                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${active ? "bg-[#e8340a] text-white" : "bg-[#d2d2d7] text-[#6e6e73]"}`}>
+                {i > 0 && <div className={`h-px w-8 ${active ? "bg-[#8B5E3C]" : "bg-[#d2d2d7]"}`} />}
+                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${active ? "bg-[#8B5E3C] text-white" : "bg-[#d2d2d7] text-[#6e6e73]"}`}>
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className={`text-xs font-medium ${active ? "text-[#1d1d1f]" : "text-[#6e6e73]"}`}>{label}</span>
@@ -160,7 +160,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               {/* Customer info */}
               <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8">
                 <div className="mb-5 flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#e8340a]/10 text-[#e8340a]">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
                     <User className="h-4 w-4" />
                   </span>
                   <h3 className="text-base font-semibold text-[#1d1d1f]">Thông tin người nhận</h3>
@@ -170,20 +170,20 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                     <label className="mb-1 block text-xs font-medium text-[#6e6e73]">Họ và tên *</label>
                     <input id="field-name" name="name" type="text" required value={form.name} onChange={handleChange}
                       placeholder="Nhập họ và tên"
-                      className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-sm text-[#1d1d1f] outline-none focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20" />
+                      className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-sm text-[#1d1d1f] outline-none focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20" />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-[#6e6e73]">Số điện thoại *</label>
                       <input id="field-phone" name="phone" type="tel" required value={form.phone} onChange={handleChange}
                         placeholder="Nhập số điện thoại"
-                        className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-sm text-[#1d1d1f] outline-none focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20" />
+                        className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-sm text-[#1d1d1f] outline-none focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20" />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-[#6e6e73]">Email</label>
                       <input name="email" type="email" value={form.email} onChange={handleChange}
                         placeholder="Nhập email (không bắt buộc)"
-                        className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-sm text-[#1d1d1f] outline-none focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20" />
+                        className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white px-4 text-sm text-[#1d1d1f] outline-none focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20" />
                     </div>
                   </div>
                 </div>
@@ -192,7 +192,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               {/* Shipping address */}
               <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8">
                 <div className="mb-5 flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#e8340a]/10 text-[#e8340a]">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
                     <MapPin className="h-4 w-4" />
                   </span>
                   <h3 className="text-base font-semibold text-[#1d1d1f]">Địa chỉ giao hàng</h3>
@@ -218,7 +218,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                           selectProvince(p);
                         }}
                         disabled={addrLoading.provinces}
-                        className="h-11 w-full appearance-none rounded-xl border border-[#d2d2d7] bg-white px-4 pr-9 text-sm text-[#1d1d1f] outline-none transition-all focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20 disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#86868b]"
+                        className="h-11 w-full appearance-none rounded-xl border border-[#d2d2d7] bg-white px-4 pr-9 text-sm text-[#1d1d1f] outline-none transition-all focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20 disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#86868b]"
                       >
                         <option value="">{addrLoading.provinces ? "Đang tải..." : "-- Chọn Tỉnh/TP --"}</option>
                         {provinces.map((p) => (
@@ -246,7 +246,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                           selectDistrict(d);
                         }}
                         disabled={!selected.province || addrLoading.districts}
-                        className="h-11 w-full appearance-none rounded-xl border border-[#d2d2d7] bg-white px-4 pr-9 text-sm text-[#1d1d1f] outline-none transition-all focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20 disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#86868b]"
+                        className="h-11 w-full appearance-none rounded-xl border border-[#d2d2d7] bg-white px-4 pr-9 text-sm text-[#1d1d1f] outline-none transition-all focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20 disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#86868b]"
                       >
                         <option value="">
                           {!selected.province
@@ -280,7 +280,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                           selectWard(w);
                         }}
                         disabled={!selected.district || addrLoading.wards}
-                        className="h-11 w-full appearance-none rounded-xl border border-[#d2d2d7] bg-white px-4 pr-9 text-sm text-[#1d1d1f] outline-none transition-all focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20 disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#86868b]"
+                        className="h-11 w-full appearance-none rounded-xl border border-[#d2d2d7] bg-white px-4 pr-9 text-sm text-[#1d1d1f] outline-none transition-all focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20 disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#86868b]"
                       >
                         <option value="">
                           {!selected.district
@@ -318,17 +318,17 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                       value={detailAddress}
                       onChange={(e) => setDetailAddress(e.target.value)}
                       placeholder="VD: 123 Nguyễn Huệ, P. Bến Nghé, Tầng 3..."
-                      className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white pl-10 pr-4 text-sm text-[#1d1d1f] outline-none transition-all placeholder:text-[#86868b] focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20"
+                      className="h-11 w-full rounded-xl border border-[#d2d2d7] bg-white pl-10 pr-4 text-sm text-[#1d1d1f] outline-none transition-all placeholder:text-[#86868b] focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20"
                     />
                   </div>
                 </div>
 
                 {/* Full address preview */}
                 {fullAddress && (
-                  <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#e8340a]/20 bg-[#fff1ee] p-3">
-                    <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-[#e8340a]" />
+                  <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#8B5E3C]/20 bg-[#FDF6F0] p-3">
+                    <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-[#8B5E3C]" />
                     <div>
-                      <p className="text-xs font-semibold text-[#e8340a]">Địa chỉ giao hàng</p>
+                      <p className="text-xs font-semibold text-[#8B5E3C]">Địa chỉ giao hàng</p>
                       <p className="mt-0.5 text-sm text-[#1d1d1f]">{fullAddress}</p>
                     </div>
                   </div>
@@ -339,14 +339,14 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                   <label className="mb-1.5 block text-xs font-medium text-[#6e6e73]">Ghi chú giao hàng</label>
                   <textarea name="note" value={form.note} onChange={handleChange} rows={2}
                     placeholder="VD: Giao giờ hành chính, gọi trước khi giao..."
-                    className="w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1d1d1f] outline-none focus:border-[#e8340a] focus:ring-1 focus:ring-[#e8340a]/20" />
+                    className="w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1d1d1f] outline-none focus:border-[#8B5E3C] focus:ring-1 focus:ring-[#8B5E3C]/20" />
                 </div>
               </div>
 
               {/* Payment method */}
               <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8">
                 <div className="mb-5 flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#e8340a]/10 text-[#e8340a]">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
                     <CreditCard className="h-4 w-4" />
                   </span>
                   <h3 className="text-base font-semibold text-[#1d1d1f]">Phương thức thanh toán</h3>
@@ -357,10 +357,10 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                     { value: "bank", label: "Chuyển khoản ngân hàng", desc: "Chuyển khoản trước, giao hàng sau", icon: ShieldCheck },
                   ].map(({ value, label, desc, icon: Icon }) => (
                     <label key={value}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${form.payment === value ? "border-[#e8340a] bg-[#e8340a]/5" : "border-[#d2d2d7] hover:bg-[#f5f5f7]"}`}>
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${form.payment === value ? "border-[#8B5E3C] bg-[#8B5E3C]/5" : "border-[#d2d2d7] hover:bg-[#f5f5f7]"}`}>
                       <input type="radio" name="payment" value={value}
                         checked={form.payment === value} onChange={handleChange}
-                        className="mt-0.5 h-4 w-4 accent-[#e8340a]" />
+                        className="mt-0.5 h-4 w-4 accent-[#8B5E3C]" />
                       <Icon className="mt-0.5 h-5 w-5 shrink-0 text-[#6e6e73]" />
                       <div>
                         <span className="text-sm font-medium text-[#1d1d1f]">{label}</span>
@@ -377,7 +377,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                       <p>Ngân hàng: <span className="font-medium text-[#1d1d1f]">Vietcombank</span></p>
                       <p>STK: <span className="font-medium text-[#1d1d1f]">1234567890</span></p>
                       <p>Chủ TK: <span className="font-medium text-[#1d1d1f]">NGUYEN VAN A</span></p>
-                      <p>Nội dung: <span className="font-medium text-[#e8340a]">BASEW [SĐT]</span></p>
+                      <p>Nội dung: <span className="font-medium text-[#8B5E3C]">BASEW [SĐT]</span></p>
                     </div>
                   </div>
                 )}
@@ -385,7 +385,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
 
               {/* Submit - mobile */}
               <button type="submit" disabled={status === "sending"}
-                className="h-12 w-full rounded-full bg-[#e8340a] text-[15px] font-medium text-white transition-all hover:bg-[#c92d08] disabled:opacity-60 lg:hidden">
+                className="h-12 w-full rounded-full bg-[#8B5E3C] text-[15px] font-medium text-white transition-all hover:bg-[#6F4A2F] disabled:opacity-60 lg:hidden">
                 {status === "sending" ? "Đang xử lý..." : `Đặt hàng — ${formatPrice(grandTotal)}`}
               </button>
             </form>
@@ -410,7 +410,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                         <p className="text-sm font-medium text-[#1d1d1f] line-clamp-1">{item.name}</p>
                         <div className="mt-1 flex items-center gap-2">
                           <span className="inline-block h-3.5 w-3.5 rounded-full border border-[#d2d2d7]"
-                            style={{ backgroundColor: item.color === "Trắng" ? "#f0f0f0" : item.color === "Đen" ? "#1d1d1f" : "#e8340a" }} />
+                            style={{ backgroundColor: item.color === "Trắng" ? "#f0f0f0" : item.color === "Đen" ? "#1d1d1f" : "#8B5E3C" }} />
                           <span className="text-xs text-[#6e6e73]">{item.color}</span>
                         </div>
                       </div>
@@ -461,7 +461,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                   const formEl = document.querySelector("form") as HTMLFormElement;
                   formEl?.requestSubmit();
                 }}
-                className="mt-6 hidden h-12 w-full rounded-full bg-[#e8340a] text-[15px] font-medium text-white transition-all hover:bg-[#c92d08] disabled:opacity-60 lg:inline-flex lg:items-center lg:justify-center">
+                className="mt-6 hidden h-12 w-full rounded-full bg-[#8B5E3C] text-[15px] font-medium text-white transition-all hover:bg-[#6F4A2F] disabled:opacity-60 lg:inline-flex lg:items-center lg:justify-center">
                 {status === "sending" ? "Đang xử lý..." : `Đặt hàng — ${formatPrice(grandTotal)}`}
               </button>
             </div>

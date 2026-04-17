@@ -46,7 +46,7 @@ const DemoSection: FC = () => {
           >
             {/* Header */}
             <div className="border-b border-[#f5f5f7] p-6 text-center sm:p-10">
-              <p className="text-sm font-semibold uppercase tracking-widest text-[#e8340a]">Demo</p>
+              <p className="text-sm font-semibold uppercase tracking-widest text-[#8B5E3C]">Demo</p>
               <h2 className="mt-3 text-section-title text-[#1d1d1f]">{t.demo.heading}</h2>
               <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#4a4a4f]">
                 {t.demo.desc}
@@ -59,7 +59,7 @@ const DemoSection: FC = () => {
               <div className="border-b border-[#f5f5f7] p-6 sm:p-8 lg:border-b-0 lg:border-r">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <h3 className="text-card-title text-[#1d1d1f]">{t.demo.videoTitle}</h3>
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff1ee] text-[#e8340a]">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FDF6F0] text-[#8B5E3C]">
                     <Video className="h-5 w-5" />
                   </span>
                 </div>
@@ -83,9 +83,9 @@ const DemoSection: FC = () => {
                         allowFullScreen
                       />
                     ) : (
-                      <div className="relative flex h-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#fff1ee] to-[#f5f5f7] p-6 text-center">
+                      <div className="relative flex h-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#FDF6F0] to-[#f5f5f7] p-6 text-center">
                         <div className="relative">
-                          <span className="mx-auto mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#e8340a] shadow-sm">
+                          <span className="mx-auto mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#8B5E3C] shadow-sm">
                             <PlayCircle className="h-7 w-7" />
                           </span>
                           <h4 className="text-sm font-semibold text-[#1d1d1f]">{t.demo.videoPlaceholderTitle}</h4>
@@ -105,7 +105,7 @@ const DemoSection: FC = () => {
                       target="_blank"
                       rel="noreferrer"
                       onClick={() => trackCTA("guide_video", "demo_section")}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[#e8340a] transition-colors hover:underline"
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[#8B5E3C] transition-colors hover:underline"
                     >
                       {t.demo.videoCta}
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -118,13 +118,13 @@ const DemoSection: FC = () => {
               <div className="p-6 sm:p-8">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[#e8340a]">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#8B5E3C]">
                       BA.SEW Tracking
                     </p>
                     <h3 className="mt-2 text-card-title text-[#1d1d1f]">{t.demo.trackingTitle}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-[#4a4a4f]">{t.demo.trackingDesc}</p>
                   </div>
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff1ee] text-[#e8340a]">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FDF6F0] text-[#8B5E3C]">
                     <MonitorSmartphone className="h-5 w-5" />
                   </span>
                 </div>
@@ -137,7 +137,7 @@ const DemoSection: FC = () => {
                         key={item}
                         className="flex items-start gap-2.5 rounded-xl bg-[#f5f5f7] p-4 text-sm leading-relaxed text-[#1d1d1f]"
                       >
-                        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#e8340a]" />
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#8B5E3C]" />
                         <span>{item}</span>
                       </div>
                     );
@@ -153,7 +153,7 @@ const DemoSection: FC = () => {
                     target="_blank"
                     rel="noreferrer"
                     onClick={() => trackCTA("tracking_demo", "demo_section")}
-                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#e8340a] px-5 text-sm font-medium text-white transition-all hover:bg-[#c92d08] active:scale-[0.97]"
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#8B5E3C] px-5 text-sm font-medium text-white transition-all hover:bg-[#6F4A2F] active:scale-[0.97]"
                   >
                     {t.demo.trackingCta}
                     <ExternalLink className="h-3.5 w-3.5" />

@@ -26,28 +26,28 @@ const featureTabs: FeatureTab[] = [
     label: "SOS một chạm",
     desc: "Nhấn một lần — thiết bị lập tức phát tín hiệu cảnh báo, không cần mở khóa hay thao tác phức tạp.",
     highlight: 0,
-    color: "bg-[#e8340a] text-white",
+    color: "bg-[#8B5E3C] text-white",
   },
   {
     icon: PhoneCall,
     label: "Tự động gọi điện",
     desc: "Thiết bị tự gọi theo danh sách liên hệ khẩn cấp đã cấu hình sẵn, không cần kết nối internet.",
     highlight: 1,
-    color: "bg-[#e8340a] text-white",
+    color: "bg-[#8B5E3C] text-white",
   },
   {
     icon: MapPinned,
     label: "Chia sẻ vị trí GPS",
     desc: "Toạ độ GPS chính xác được gửi qua SMS kèm link bản đồ để người thân tra cứu ngay lập tức.",
     highlight: 2,
-    color: "bg-[#e8340a] text-white",
+    color: "bg-[#8B5E3C] text-white",
   },
   {
     icon: ShieldCheck,
     label: "Theo dõi qua web",
     desc: "Trang web theo dõi riêng — xem vị trí thời gian thực, lịch sử di chuyển và vùng an toàn.",
     highlight: 3,
-    color: "bg-[#e8340a] text-white",
+    color: "bg-[#8B5E3C] text-white",
   },
 ];
 
@@ -77,8 +77,8 @@ const HeroSection: FC = () => {
           }`}
       >
         {/* Brand pill */}
-        <span className="inline-flex items-center gap-2 rounded-full bg-[#fff1ee] px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-[#e8340a] ring-1 ring-[#e8340a]/20">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#e8340a] sos-pulse" />
+        <span className="inline-flex items-center gap-2 rounded-full bg-[#FDF6F0] px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-[#8B5E3C] ring-1 ring-[#8B5E3C]/20">
+          <span className="inline-block h-2 w-2 rounded-full bg-[#8B5E3C] sos-pulse" />
           BA.SEW — Thiết bị khẩn cấp
         </span>
 
@@ -93,7 +93,7 @@ const HeroSection: FC = () => {
           <a
             href="#demo"
             onClick={() => trackCTA("hero_demo", "hero")}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#e8340a] px-7 text-[15px] font-medium text-white shadow-sm transition-all hover:bg-[#c92d08] hover:shadow-md active:scale-[0.97]"
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-7 text-[15px] font-medium text-white shadow-sm transition-all hover:bg-[#6F4A2F] hover:shadow-md active:scale-[0.97]"
           >
             {t.hero.ctaDemo}
             <ArrowRight className="h-4 w-4" />
@@ -101,7 +101,7 @@ const HeroSection: FC = () => {
           <a
             href="#contact"
             onClick={() => trackCTA("hero_contact", "hero")}
-            className="inline-flex h-11 items-center rounded-full border-2 border-[#e8340a] px-7 text-[15px] font-medium text-[#e8340a] transition-all hover:bg-[#e8340a] hover:text-white active:scale-[0.97]"
+            className="inline-flex h-11 items-center rounded-full border-2 border-[#8B5E3C] px-7 text-[15px] font-medium text-[#8B5E3C] transition-all hover:bg-[#8B5E3C] hover:text-white active:scale-[0.97]"
           >
             {t.hero.ctaOrder}
           </a>
@@ -131,7 +131,7 @@ const HeroSection: FC = () => {
           />
           {/* SOS overlay badge */}
           <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-sm">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#e8340a] sos-pulse" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#8B5E3C] sos-pulse" />
             <span className="text-xs font-semibold text-[#1d1d1f]">SOS Ready</span>
           </div>
         </div>
@@ -149,7 +149,7 @@ const HeroSection: FC = () => {
               <div
                 key={i}
                 className={`overflow-hidden rounded-2xl bg-white ring-2 transition-all duration-300 ${activeTab !== null && featureTabs[activeTab].highlight === i
-                  ? "ring-[#e8340a] shadow-lg scale-[1.03]"
+                  ? "ring-[#8B5E3C] shadow-lg scale-[1.03]"
                   : "ring-transparent"
                   }`}
               >
@@ -193,7 +193,7 @@ const HeroSection: FC = () => {
                     type="button"
                     onClick={() => setActiveTab(isActive ? null : idx)}
                     className={`flex flex-col items-center gap-2.5 rounded-2xl p-5 text-center transition-all duration-200 ${isActive
-                      ? "bg-[#e8340a] text-white shadow-md scale-[1.04]"
+                      ? "bg-[#8B5E3C] text-white shadow-md scale-[1.04]"
                       : "bg-white text-[#1d1d1f] hover:shadow-md hover:scale-[1.02]"
                       }`}
                   >
@@ -202,7 +202,7 @@ const HeroSection: FC = () => {
                         }`}
                     >
                       <Icon
-                        className={`h-5 w-5 ${isActive ? "text-white" : "text-[#e8340a]"
+                        className={`h-5 w-5 ${isActive ? "text-white" : "text-[#8B5E3C]"
                           }`}
                       />
                     </span>
@@ -218,12 +218,12 @@ const HeroSection: FC = () => {
                 }`}
             >
               {activeTab !== null && (
-                <div className="rounded-2xl bg-white px-6 py-4 ring-1 ring-[#e8340a]/20">
+                <div className="rounded-2xl bg-white px-6 py-4 ring-1 ring-[#8B5E3C]/20">
                   <div className="flex items-start gap-3">
-                    <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#fff1ee]">
+                    <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FDF6F0]">
                       {(() => {
                         const Icon = featureTabs[activeTab].icon;
-                        return <Icon className="h-4 w-4 text-[#e8340a]" />;
+                        return <Icon className="h-4 w-4 text-[#8B5E3C]" />;
                       })()}
                     </span>
                     <div>

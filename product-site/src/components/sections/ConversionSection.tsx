@@ -3,7 +3,7 @@ import { Check, ShoppingBag, Shield, Tag } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { trackCTA } from "@/services/analytics/webAnalytics";
 import { useInView } from "@/hooks/useInView";
-import imgMain from "@/assets/img_main.webp";
+import imgMain from "@/assets/img_main.png";
 
 interface ConversionSectionProps {
   onOrderClick?: () => void;
@@ -39,7 +39,7 @@ const ConversionSection: FC<ConversionSectionProps> = ({ onOrderClick }) => {
           >
 
             {/* LEFT — hình ảnh thực tế sản phẩm */}
-            <div className="flex items-center justify-center bg-[#fff1ee] p-8 sm:w-[42%]">
+            <div className="flex items-center justify-center bg-[#FDF6F0] p-8 sm:w-[42%]">
               <img
                 src={imgMain}
                 alt="Thiết bị BA.SEW"
@@ -72,7 +72,7 @@ const ConversionSection: FC<ConversionSectionProps> = ({ onOrderClick }) => {
               <div className="mt-5 space-y-2.5">
                 {t.pricingOrder.includes.map((item) => (
                   <div key={item} className="flex items-center gap-2.5 text-sm text-[#1d1d1f]">
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e8340a]/10 text-[#e8340a]">
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
                     <span>{item}</span>
@@ -87,7 +87,7 @@ const ConversionSection: FC<ConversionSectionProps> = ({ onOrderClick }) => {
                   onOrderClick?.();
                   trackCTA("open_order_modal", "pricing");
                 }}
-                className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#e8340a] text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#c92d08] active:scale-[0.97] sos-pulse"
+                className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#8B5E3C] text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#6F4A2F] active:scale-[0.97] sos-pulse"
               >
                 <ShoppingBag className="h-5 w-5" />
                 Đặt hàng ngay

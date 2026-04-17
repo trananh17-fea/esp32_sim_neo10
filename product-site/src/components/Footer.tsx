@@ -9,7 +9,7 @@ const Footer: FC = () => {
   const { t } = useI18n();
 
   return (
-    <footer id="contact" className="scroll-mt-12 border-t-2 border-[#e8340a]/30 bg-[#1d1d1f]">
+    <footer id="contact" className="scroll-mt-12 border-t-2 border-[#8B5E3C]/30 bg-[#1d1d1f]">
       {/* Contact section */}
       <div className="container py-12">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
@@ -48,7 +48,7 @@ const Footer: FC = () => {
             <a
               href={`tel:${t.contact.phone}`}
               onClick={() => trackContactClick("phone")}
-              className="mt-5 inline-flex h-9 items-center rounded-full bg-[#e8340a] px-5 text-xs font-semibold text-white transition-all hover:bg-[#c92d08]"
+              className="mt-5 inline-flex h-9 items-center rounded-full bg-[#8B5E3C] px-5 text-xs font-semibold text-white transition-all hover:bg-[#6F4A2F]"
             >
               {t.contact.callCta}
             </a>

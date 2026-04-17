@@ -48,7 +48,7 @@ const OverviewSection: FC = () => {
           ref={headRef}
           className={`container reveal${headVisible ? " is-visible" : ""}`}
         >
-          <p className="text-sm font-semibold uppercase tracking-widest text-[#e8340a]">
+          <p className="text-sm font-semibold uppercase tracking-widest text-[#8B5E3C]">
             {t.overview.processHeading}
           </p>
           <h2 className="mx-auto mt-3 max-w-2xl text-section-title text-[#1d1d1f]">
@@ -80,7 +80,7 @@ const OverviewSection: FC = () => {
                   key={item}
                   className="rounded-2xl bg-white p-6 text-center transition-all hover:shadow-lg hover:-translate-y-1"
                 >
-                  <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#fff1ee] text-[#e8340a]">
+                  <span className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#FDF6F0] text-[#8B5E3C]">
                     <Icon className="h-5 w-5" />
                   </span>
                   <p className="text-sm font-semibold leading-snug text-[#1d1d1f]">{item}</p>
@@ -109,10 +109,10 @@ const OverviewSection: FC = () => {
                   <span className="absolute right-3 top-2 text-5xl font-black text-[#f5f5f7] select-none">
                     {index + 1}
                   </span>
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#e8340a] text-white">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#8B5E3C] text-white">
                     <Icon className="h-5 w-5" />
                   </span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#e8340a]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#8B5E3C]">
                     Bước {index + 1}
                   </span>
                   <h4 className="text-sm font-semibold text-[#1d1d1f]">
@@ -135,7 +135,7 @@ const OverviewSection: FC = () => {
           ref={processRef}
           className={`container reveal${processVisible ? " is-visible" : ""}`}
         >
-          <p className="mb-2 text-center text-sm font-semibold uppercase tracking-widest text-[#e8340a]">
+          <p className="mb-2 text-center text-sm font-semibold uppercase tracking-widest text-[#8B5E3C]">
             {t.overview.processHeading}
           </p>
           <p className="mx-auto mb-10 max-w-xl text-center text-sm leading-relaxed text-[#4a4a4f]">

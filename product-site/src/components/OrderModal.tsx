@@ -8,7 +8,7 @@ import productImg3 from "@/assets/img3.jpg";
 const PRODUCT_COLORS = [
   { name: "Đen", value: "#1d1d1f", image: productImg1 },
   { name: "Trắng", value: "#f0f0f0", image: productImg2 },
-  { name: "Xanh", value: "#e8340a", image: productImg3 },
+  { name: "Nâu", value: "#8B5E3C", image: productImg3 },
 ];
 
 const PRODUCT = {
@@ -71,7 +71,7 @@ const OrderModal: FC<OrderModalProps> = ({ isOpen, onClose }) => {
           {/* Name + price */}
           <div className="mt-4 flex items-center justify-between">
             <p className="text-sm font-semibold text-[#1d1d1f]">{PRODUCT.name}</p>
-            <p className="text-sm font-bold text-[#e8340a]">
+            <p className="text-sm font-bold text-[#8B5E3C]">
               {PRODUCT.price.toLocaleString("vi-VN")}đ
             </p>
           </div>
@@ -85,8 +85,8 @@ const OrderModal: FC<OrderModalProps> = ({ isOpen, onClose }) => {
               {PRODUCT_COLORS.map((color) => (
                 <button key={color.name} type="button" onClick={() => setSelectedColor(color)}
                   className={`inline-flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${selectedColor.name === color.name
-                      ? "border-[#e8340a] ring-2 ring-[#e8340a]/20"
-                      : "border-[#d2d2d7] hover:border-[#86868b]"
+                    ? "border-[#8B5E3C] ring-2 ring-[#8B5E3C]/20"
+                    : "border-[#d2d2d7] hover:border-[#86868b]"
                     }`}>
                   <span className="h-5 w-5 rounded-full" style={{ backgroundColor: color.value }} />
                 </button>
@@ -115,7 +115,7 @@ const OrderModal: FC<OrderModalProps> = ({ isOpen, onClose }) => {
 
           {/* Add to cart */}
           <button type="button" onClick={handleAddToCart}
-            className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-[15px] font-medium text-white transition-all ${added ? "bg-green-500" : "bg-[#e8340a] hover:bg-[#c92d08]"
+            className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-[15px] font-medium text-white transition-all ${added ? "bg-green-500" : "bg-[#8B5E3C] hover:bg-[#6F4A2F]"
               }`}>
             {added
               ? <><Check className="h-5 w-5" />Đã thêm vào giỏ!</>

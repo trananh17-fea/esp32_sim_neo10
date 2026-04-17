@@ -73,7 +73,7 @@ const Navbar: FC<NavbarProps> = ({ onHelpClick, onOrderClick, onCheckout }) => {
           >
             <ShoppingBag className="h-[18px] w-[18px]" />
             {totalItems > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e8340a] px-1 text-[10px] font-bold text-white">
+              <span className="absolute -right-0.5 -top-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#8B5E3C] px-1 text-[10px] font-bold text-white">
                 {totalItems}
               </span>
             )}
@@ -82,7 +82,7 @@ const Navbar: FC<NavbarProps> = ({ onHelpClick, onOrderClick, onCheckout }) => {
           <button
             type="button"
             onClick={() => { onOrderClick?.(); trackCTA("order_nav", "navbar"); }}
-            className="hidden h-[30px] items-center rounded-full bg-[#e8340a] px-4 text-xs font-semibold text-white transition-all hover:bg-[#c92d08] md:inline-flex"
+            className="hidden h-[30px] items-center rounded-full bg-[#8B5E3C] px-4 text-xs font-semibold text-white transition-all hover:bg-[#6F4A2F] md:inline-flex"
           >
             {t.nav.orderCta}
           </button>
@@ -118,7 +118,7 @@ const Navbar: FC<NavbarProps> = ({ onHelpClick, onOrderClick, onCheckout }) => {
             <button
               type="button"
               onClick={() => { setMobileOpen(false); onHelpClick?.(); }}
-              className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#e8340a] transition-colors hover:bg-[#f5f5f7]"
+              className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#8B5E3C] transition-colors hover:bg-[#f5f5f7]"
             >
               Trợ giúp
             </button>
@@ -129,7 +129,7 @@ const Navbar: FC<NavbarProps> = ({ onHelpClick, onOrderClick, onCheckout }) => {
                 onOrderClick?.();
                 trackCTA("order_nav_mobile", "navbar");
               }}
-              className="mt-3 inline-flex h-11 items-center justify-center rounded-full bg-[#e8340a] px-5 text-sm font-semibold text-white transition-all hover:bg-[#c92d08]"
+              className="mt-3 inline-flex h-11 items-center justify-center rounded-full bg-[#8B5E3C] px-5 text-sm font-semibold text-white transition-all hover:bg-[#6F4A2F]"
             >
               {t.nav.orderCta}
             </button>
